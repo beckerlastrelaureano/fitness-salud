@@ -33,8 +33,9 @@ const BaseDemo = (() => {
     ];
     const d = {
       alumnos: {}, contactos: {}, pagos: {}, asistencias: {}, pagosProfes: {},
-      claves: { 20111222: { creada: true } },
-      cuentas: { 20111222: 'demo1234' },
+      // El dueño todavía no tiene contraseña: se configura con el DNI de prueba.
+      claves: {},
+      cuentas: {},
       config: {
         publico: { whatsapp: '2302 00-0000', clasesActivas: true },
         negocio: {

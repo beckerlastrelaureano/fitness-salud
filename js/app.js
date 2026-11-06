@@ -116,7 +116,7 @@ const App = (() => {
       <div class="entrada-marca">${logoGym(72)}<h1 class="t-titulo">${esc(estado.gym.nombre)}</h1>
         <span class="t-tenue" style="font-size:12px">con <span class="marca-gymapp">gym<b>App</b></span></span></div>
       ${contenido}
-      ${Datos.modo === 'demo' ? `<p class="demo-nota"><strong>Modo demo</strong>. Dueño <code>20111222</code> (<code>demo1234</code>) · Profe <code>27333444</code> · Alumno <code>28999111</code><br><button class="link" id="reiniciar-demo">Reiniciar demo</button></p>` : ''}
+      ${Datos.modo === 'demo' ? `<p class="demo-nota"><strong>Modo demo</strong>. Dueño: entrá con <code>${esc(CONFIG.dniPrueba)}</code> y configurá tu DNI · Profe <code>27333444</code> · Alumno <code>28999111</code><br><button class="link" id="reiniciar-demo">Reiniciar demo</button></p>` : ''}
     </main>`;
     const r = $('#reiniciar-demo');
     if (r) r.addEventListener('click', () => Datos.reiniciarDemo());
@@ -135,6 +135,7 @@ const App = (() => {
       const dni = U.soloDigitos(f.dni.value);
       if (!dni) return;
       conCarga($('button', f), async () => {
+        if (dni === CONFIG.dniPrueba && !CONFIG.dnisDueno.includes(dni) && await Datos.duenoSinClave()) return vistaConfigurarDueno();
         const quien = await Datos.identificar(dni);
         if (!quien.opciones.length) return vistaDni('No encontramos ese DNI. Consultá en el gimnasio.');
         if (quien.opciones.length === 1) return entrarComo(quien.opciones[0], dni, quien);
@@ -186,6 +187,31 @@ const App = (() => {
       const problema = Ajustes.problemaClave(f.clave.value, f.repetida.value, dni);
       if (problema) return U.aviso(problema, 'error');
       conCarga($('.btn-primario', f), () => Datos.crearClaveDueno(dni, f.clave.value));
+    });
+    $('#volver').addEventListener('click', () => vistaDni());
+  }
+
+  // Se llega con el DNI de prueba: el dueño pone su DNI real y crea su contraseña.
+  function vistaConfigurarDueno() {
+    marcoIngreso(`<form class="col" id="f-config">
+      <p class="t-suave" style="text-align:center">Configurá tu acceso de dueño: poné tu DNI y creá tu contraseña. Después entrás siempre con ellos.</p>
+      ${campo('Tu DNI', '<input class="input t-num" name="dni" inputmode="numeric" autocomplete="username" required autofocus placeholder="Sin puntos ni espacios">')}
+      ${campo('Contraseña nueva', '<input class="input" name="clave" type="password" autocomplete="new-password" required>', `Al menos ${Ajustes.CLAVE_MINIMA} caracteres.`)}
+      ${campo('Repetí la contraseña', '<input class="input" name="repetida" type="password" autocomplete="new-password" required>')}
+      <button class="btn btn-primario btn-ancho">Guardar y entrar</button>
+      <button type="button" class="link" id="volver">Volver</button></form>`);
+    const f = $('#f-config');
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const dni = U.soloDigitos(f.dni.value);
+      if (!CONFIG.dnisDueno.includes(dni)) return U.aviso('Ese DNI no está habilitado como dueño.', 'error');
+      const problema = Ajustes.problemaClave(f.clave.value, f.repetida.value, dni);
+      if (problema) return U.aviso(problema, 'error');
+      conCarga($('.btn-primario', f), async () => {
+        const quien = await Datos.identificar(dni);
+        if (quien.tieneClave) { U.aviso('Ese DNI ya tiene contraseña. Entrá con él.', 'error'); return vistaDni(); }
+        await Datos.crearClaveDueno(dni, f.clave.value);
+      });
     });
     $('#volver').addEventListener('click', () => vistaDni());
   }

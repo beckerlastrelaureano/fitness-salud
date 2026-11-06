@@ -58,6 +58,13 @@ const Datos = (() => {
   const entrarProfe = (dni) => base.login(dni, claveProfe(dni));
   const entrarDueno = (dni, clave) => base.login(dni, clave);
 
+  // ¿Queda algún DNI de dueño sin contraseña? Mientras quede, el DNI de
+  // prueba lleva a la pantalla para configurarlo.
+  async function duenoSinClave() {
+    const claves = await Promise.all(CONFIG.dnisDueno.map((dni) => base.obtener('claves', dni)));
+    return claves.some((c) => !c);
+  }
+
   async function crearClaveDueno(dni, clave) {
     await base.crearCuenta(dni, clave);
     await base.guardar('claves', dni, { creada: true });
@@ -300,7 +307,7 @@ const Datos = (() => {
   const registrarPagoProfe = (pago) => base.agregar('pagosProfes', pago);
 
   return { get modo() { return base.modo; }, reiniciarDemo: () => base.reiniciar(), iniciar, onSesion, identificar,
-    entrarAlumno, entrarProfe, entrarDueno, crearClaveDueno, salir,
+    entrarAlumno, entrarProfe, entrarDueno, duenoSinClave, crearClaveDueno, salir,
     cambiarClave: (dni, actual, nueva) => base.cambiarClave(dni, actual, nueva),
     listarAlumnos, guardarAlumno, borrarAlumno, obtenerAlumno, asignarRutina, anotarEnTurno, guardarTelefono, ponerAlDia, negocio, guardarNegocio, aplicarPrecios,
     publico, guardarPublico, listarEquipo, guardarProfe, borrarProfe,

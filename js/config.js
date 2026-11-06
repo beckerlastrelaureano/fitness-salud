@@ -22,7 +22,12 @@ const CONFIG = {
   nombreGimnasio: "Fitness Salud",
 
   // DNI del dueño. Tiene que ser el mismo que figura en firestore.rules.
-  dnisDueno: ["20111222"],
+  dnisDueno: ["24408902"],
+
+  // DNI de prueba: quien lo pone va a la pantalla para configurar el acceso
+  // del dueño (su DNI real y su contraseña). Una vez creada la contraseña,
+  // este DNI deja de servir.
+  dniPrueba: "20111222",
 
   // Cuántos días antes del vencimiento una cuota pasa a "vence pronto".
   diasAviso: 7,

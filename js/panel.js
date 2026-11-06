@@ -108,11 +108,14 @@ const Panel = (() => {
     await cargar();
   }
 
-  // Lista de un turno: el profe elige fecha y turno, y tilda quién vino.
+  // Lista de un turno: el profe elige fecha y turno, suma alumnos de su
+  // actividad a la clase y tilda quién vino.
   async function panelTurnos(cont, actividad, alumnos, turnos) {
     const propios = turnos.filter((t) => t.actividad === actividad).sort((a, b) => a.hora.localeCompare(b.hora));
     let fecha = U.hoy();
     let turnoId = null;
+    // Los recién sumados quedan tildados como presentes hasta que se guarde.
+    let sumados = new Set();
     cont.innerHTML = `<section class="panel" style="overflow:hidden">
       <div class="panel-cab" style="align-items:flex-end;flex-wrap:wrap">
         <div><h2 class="t-titulo">${esc(nombreActividad(actividad))}</h2><span class="sub" id="dia-texto"></span></div>
@@ -120,12 +123,16 @@ const Panel = (() => {
       </div>
       <div class="filtros" id="turnos-dia" style="padding:0 18px 14px"></div>
       <div id="lista-asistencia"></div>
-      <div style="padding:14px 18px;border-top:1px solid var(--borde2)" id="caja-guardar"><button class="btn btn-primario btn-ancho" id="guardar-asistencia">Guardar asistencia</button></div>
+      <div style="padding:14px 18px 0;border-top:1px solid var(--borde2)" id="caja-sumar" hidden>
+        <button type="button" class="btn btn-secundario btn-ancho" id="sumar-alumnos">${ic('mas')}Sumar alumnos a esta clase</button></div>
+      <div style="padding:14px 18px" id="caja-guardar"><button class="btn btn-primario btn-ancho" id="guardar-asistencia">Guardar asistencia</button></div>
     </section>`;
     const contar = () => {
       const n = $$('#lista-asistencia input:checked', cont).length;
       $('#guardar-asistencia', cont).textContent = `Guardar asistencia (${n})`;
     };
+    const deLaActividad = () => alumnos.filter((a) => (a.actividades || []).includes(actividad)).sort(porNombre);
+    const anotadosEn = (id) => alumnos.filter((a) => (a.turnos || []).includes(id)).sort(porNombre);
 
     async function pintar() {
       const delDia = propios.filter((t) => t.dia === U.diaTurno(fecha));
@@ -133,25 +140,71 @@ const Panel = (() => {
       $('#dia-texto', cont).textContent = U.fechaLarga(fecha);
       $('#turnos-dia', cont).innerHTML = delDia.map((t) => `<button type="button" class="filtro ${t.id === turnoId ? 'activo' : ''}" data-t="${esc(t.id)}">${esc(t.hora)}${t.profe ? ` · ${esc(primerNombre(t.profe))}` : ''}</button>`).join('');
       $('#caja-guardar', cont).hidden = true;
+      $('#caja-sumar', cont).hidden = !turnoId;
       if (!turnoId) { $('#lista-asistencia', cont).innerHTML = panelVacio('No hay turnos este día.'); return; }
-      const anotados = alumnos.filter((a) => (a.turnos || []).includes(turnoId)).sort(porNombre);
+      const turno = propios.find((t) => t.id === turnoId);
+      const anotados = anotadosEn(turnoId);
       const presentes = await Datos.asistenciaTurno(fecha, turnoId);
+      $('#dia-texto', cont).textContent = `${U.fechaLarga(fecha)} · ${anotados.length} de ${turno.cupo} en la clase`;
       $('#lista-asistencia', cont).innerHTML = anotados.map((a) => `<label class="lista-fila">${avatar(a.nombre)}
         <div class="datos"><strong>${esc(a.nombre)}</strong><small>DNI ${esc(a.dni)}</small></div>
-        <input type="checkbox" value="${esc(a.dni)}" style="width:22px;height:22px;accent-color:var(--acento)" ${presentes.includes(a.dni) ? 'checked' : ''}></label>`).join('')
-        || panelVacio('Todavía no hay alumnos anotados en este turno.');
+        <input type="checkbox" value="${esc(a.dni)}" style="width:22px;height:22px;accent-color:var(--acento)" ${presentes.includes(a.dni) || sumados.has(a.dni) ? 'checked' : ''}></label>`).join('')
+        || panelVacio('Todavía no hay alumnos en esta clase. Sumalos con el botón de abajo.');
       $('#caja-guardar', cont).hidden = !anotados.length;
       contar();
     }
 
-    $('#turnos-dia', cont).addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) { turnoId = b.dataset.t; pintar(); } });
+    // Elegir alumnos de la actividad que todavía no están en el turno.
+    function modalSumar() {
+      const turno = propios.find((t) => t.id === turnoId);
+      const libres = deLaActividad().filter((a) => !(a.turnos || []).includes(turnoId));
+      const lugar = Math.max(0, turno.cupo - anotadosEn(turnoId).length);
+      const d = U.modal(`<form class="modal-cuerpo"><h2 class="t-titulo">Sumar a ${esc(nombreActividad(actividad))} · ${esc(textoTurno(turno))}</h2>
+        <p class="t-suave" id="sumar-lugar"></p>
+        ${libres.length > 6 ? `<div class="buscador">${ic('buscar', 16)}<input class="input" id="buscar-sumar" placeholder="Buscar por nombre o DNI…"></div>` : ''}
+        <div class="picker-lista">${libres.map((a) => `<label class="anotar-fila" data-busca="${esc(U.normalizar(`${a.nombre} ${a.dni}`))}" style="cursor:pointer">
+          <input type="checkbox" value="${esc(a.dni)}"><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(a.nombre)}</span><small class="t-tenue t-num">${esc(a.dni)}</small></label>`).join('')
+          || `<p class="vacio-chico" style="border:0">Todos los alumnos de ${esc(nombreActividad(actividad))} ya están en esta clase.</p>`}</div>
+        <div class="acciones"><button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
+          <button class="btn btn-primario" ${libres.length ? '' : 'disabled'}>Sumar a la clase</button></div></form>`);
+      const f = $('form', d);
+      const elegidos = () => $$('.picker-lista input:checked', d).map((i) => i.value);
+      const mostrarLugar = () => {
+        const n = elegidos().length;
+        $('#sumar-lugar', d).textContent = `Quedan ${lugar} lugar${lugar === 1 ? '' : 'es'} de ${turno.cupo}.${n ? ` Elegiste ${n}.` : ''}`;
+      };
+      f.addEventListener('change', mostrarLugar);
+      const buscar = $('#buscar-sumar', d);
+      if (buscar) buscar.addEventListener('input', () => {
+        const texto = U.normalizar(buscar.value);
+        $$('[data-busca]', d).forEach((fila) => { fila.hidden = !fila.dataset.busca.includes(texto); });
+      });
+      mostrarLugar();
+      f.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const nuevos = elegidos();
+        if (!nuevos.length) return U.aviso('Elegí al menos un alumno', 'error');
+        if (nuevos.length > lugar) return U.aviso(`El cupo es ${turno.cupo}: ${lugar === 1 ? 'queda 1 lugar' : `quedan ${lugar} lugares`}`, 'error');
+        conCarga($('.btn-primario', f), async () => {
+          await Datos.anotarEnTurno(turnoId, alumnos, [...anotadosEn(turnoId).map((a) => a.dni), ...nuevos]);
+          nuevos.forEach((dni) => sumados.add(dni));
+          d.close();
+          U.aviso(`${nuevos.length === 1 ? 'Alumno sumado' : `${nuevos.length} alumnos sumados`}. Ahora guardá la asistencia.`);
+          await pintar();
+        });
+      });
+    }
+
+    $('#turnos-dia', cont).addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) { turnoId = b.dataset.t; sumados = new Set(); pintar(); } });
     $('#lista-asistencia', cont).addEventListener('change', contar);
-    $('#fecha', cont).addEventListener('change', (e) => { fecha = e.target.value || U.hoy(); pintar(); });
+    $('#fecha', cont).addEventListener('change', (e) => { fecha = e.target.value || U.hoy(); sumados = new Set(); pintar(); });
+    $('#sumar-alumnos', cont).addEventListener('click', modalSumar);
     $('#guardar-asistencia', cont).addEventListener('click', (e) => {
       const presentes = $$('#lista-asistencia input:checked', cont).map((i) => i.value);
       const turno = propios.find((t) => t.id === turnoId);
       conCarga(e.currentTarget, async () => {
         await Datos.guardarAsistenciaTurno(fecha, turno, presentes);
+        sumados = new Set();
         U.aviso(`Asistencia guardada: ${presentes.length} presente${presentes.length === 1 ? '' : 's'}`);
       }).then(contar);
     });

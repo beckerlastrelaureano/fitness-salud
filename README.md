@@ -16,6 +16,20 @@ Hay una sola pantalla: se pone el DNI y la app sabe quién es.
 
 Si un DNI es de dos cosas (por ejemplo, profe y alumno), la app pregunta cómo entrar.
 
+**Primera vez del dueño**: entra con el DNI de prueba `20111222` (`dniPrueba` en `js/config.js`).
+La app le pide su DNI real (el de `dnisDueno`, hoy `24408902`) y que cree su contraseña.
+Desde ahí entra con su DNI y contraseña, y el DNI de prueba deja de servir.
+
+## Qué tiene el profe
+
+- **Asistencia**: elige el día y el turno de su clase. Con **Sumar alumnos a esta clase** elige
+  alumnos de su actividad y los agrega al turno (respeta el cupo). Los sumados quedan tildados;
+  tilda o destilda quién vino y toca **Guardar asistencia**. Queda en el sistema general: el
+  dueño lo ve en Inicio, Actividades, Asistencia, el Cuadro y la ficha de cada alumno, y el
+  alumno lo ve en sus clases.
+- **Clases**: crea turnos de sus actividades y anota alumnos.
+- **Mis alumnos**: los de sus actividades, con sus turnos.
+
 ## Qué tiene el dueño
 
 - **Inicio**: alumnos activos, quién vino hoy, quién debe, cuotas por vencer y quién hace días que no viene.
@@ -45,7 +59,7 @@ Si un DNI es de dos cosas (por ejemplo, profe y alumno), la app pregunta cómo e
 Mientras `js/config.js` tenga `apiKey: "COMPLETAR"`, todo queda en el navegador. En la compu,
 `http://localhost:5195/?demo` abre la demo aunque la app ya esté conectada a Firebase.
 
-- Dueño: `20111222` / `demo1234`
+- Dueño: entrar con `20111222`, poner `24408902` y crear una contraseña
 - Profe: `27333444`
 - Alumno con rutina: `28999111`
 
@@ -54,14 +68,14 @@ Mientras `js/config.js` tenga `apiKey: "COMPLETAR"`, todo queda en el navegador.
 1. En <https://console.firebase.google.com>, **Agregar proyecto** (por ejemplo `fitness-salud`).
 2. **Authentication** > Comenzar > activá **Correo electrónico/contraseña**.
 3. **Firestore Database** > Crear base de datos > modo producción > `southamerica-east1`.
-4. En `firestore.rules`, cambiá `20111222` por el DNI real del dueño. Pegá todo en
+4. En `firestore.rules`, poné el DNI real del dueño en `esDueno()`. Pegá todo en
    Firestore > **Reglas** y tocá **Publicar**.
 5. ⚙️ Configuración del proyecto > Tus apps > ícono web `</>`. Copiá `firebaseConfig`
    dentro de `firebase:` en `js/config.js`.
 6. En `js/config.js`, cambiá `dnisDueno` por el DNI real del dueño.
 7. Authentication > Configuración > **Dominios autorizados**: agregá el dominio donde se publique.
-8. Publicá, y que el dueño entre enseguida con su DNI y cree su contraseña. Hasta ese momento,
-   cualquiera que ponga ese DNI podría crearla primero.
+8. Publicá, y que el dueño entre enseguida con el DNI de prueba, ponga su DNI y cree su
+   contraseña. Hasta ese momento, cualquiera que sepa su DNI podría crearla primero.
 
 ## Si el dueño se olvida la contraseña
 

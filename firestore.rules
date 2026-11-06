@@ -12,7 +12,7 @@ service cloud.firestore {
 
     function conSesion() { return request.auth != null; }
     function dniSesion() { return request.auth.token.email.split('@')[0]; }
-    function esDueno() { return conSesion() && dniSesion() in ['20111222']; }
+    function esDueno() { return conSesion() && dniSesion() in ['24408902']; }
     function rutaEquipo() { return /databases/$(database)/documents/equipo/$(dniSesion()); }
     function esProfe() { return conSesion() && exists(rutaEquipo()); }
     function esEquipo() { return esDueno() || esProfe(); }
