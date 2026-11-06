@@ -12,7 +12,7 @@
  *   config/publico     { whatsapp, nombre, acento, tema, clasesActivas, logo }
  *   config/negocio     { precios, combos, porcentajes }  (solo el dueño)
  *   asistencias/{fecha_turno}  { fecha, actividad, turnoId, presentes }  (sala: fecha_actividad)
- *   pagos/{id}         { dni, nombre, monto, meses, fecha, reparto, venceNuevo }
+ *   pagos/{id}         { dni, nombre, monto, meses, concepto, fecha, reparto, venceNuevo }
  *   pagosProfes/{id}   { profeDni, profeNombre, actividad, periodo, monto, fecha }
  *   rutinas/{id}       { nombre, autor, dias: [{ ejercicios: [{ ejId, nombre, series, reps, desc }] }] }
  *   ejercicios/{id}    { nombre, grupo, gif }  (los que crea el gimnasio)

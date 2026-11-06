@@ -222,11 +222,22 @@ const Panel = (() => {
     return `Hola ${nombre}! Te escribimos de ${gym}. ${cuota} El valor es ${U.plata(a.monto)}. ¡Te esperamos!`;
   }
 
+  // Lo que se le puede cobrar: su cuota, cada actividad suelta o un combo.
+  function opcionesDeCobro(a, negocio) {
+    return [
+      { nombre: 'Su cuota', precio: a.monto, actividades: a.actividades || [] },
+      ...CONFIG.actividades.map((x) => ({ nombre: x.nombre, precio: Number(negocio.precios?.[x.id]) || 0, actividades: [x.id] })),
+      ...(negocio.combos || []).map((c) => ({ nombre: `Combo ${c.nombre}`, precio: Number(c.precio) || 0, actividades: c.actividades || [] })),
+    ];
+  }
+
   function modalCobro(a, negocio, alTerminar) {
     const est = U.estadoCuota(a.vence);
+    const opciones = opcionesDeCobro(a, negocio);
     const d = U.modal(`<form class="modal-cuerpo">
       <h2 class="t-titulo">Cobrar a ${esc(a.nombre)}</h2>
       <p>${chipCuota(est)} <span class="t-suave">${esc(nombresActividades(a.actividades))}</span></p>
+      ${campo('Qué paga', `<select class="input select" name="concepto">${opciones.map((o, i) => `<option value="${i}">${esc(o.nombre)} · ${U.plata(o.precio)}</option>`).join('')}</select>`)}
       <div class="dos-columnas">
         ${campo('Meses', `<select class="input select" name="meses">${[1, 2, 3, 6, 12].map((m) => `<option value="${m}">${m} ${m === 1 ? 'mes' : 'meses'}</option>`).join('')}</select>`)}
         ${campo('Monto ($)', '<input class="input t-num" name="monto" inputmode="numeric">')}
@@ -237,14 +248,17 @@ const Panel = (() => {
     const f = $('form', d);
     const mostrar = () => {
       $('#nv', d).textContent = U.fechaCorta(U.nuevoVencimiento(a.vence, Number(f.meses.value)));
-      f.monto.value = a.monto * Number(f.meses.value);
+      f.monto.value = opciones[Number(f.concepto.value)].precio * Number(f.meses.value);
     };
     f.meses.addEventListener('change', mostrar);
+    f.concepto.addEventListener('change', mostrar);
     mostrar();
     f.addEventListener('submit', (e) => {
       e.preventDefault();
       conCarga($('.btn-primario', f), async () => {
-        const vence = await Datos.registrarPago(a, { monto: Number(U.soloDigitos(f.monto.value)) || 0, meses: Number(f.meses.value) }, negocio);
+        const elegida = opciones[Number(f.concepto.value)];
+        const vence = await Datos.registrarPago(a, { monto: Number(U.soloDigitos(f.monto.value)) || 0, meses: Number(f.meses.value),
+          concepto: elegida.nombre, actividades: elegida.actividades }, negocio);
         a.vence = vence;
         d.close();
         U.aviso(`Pago registrado · vence ${U.fechaCorta(vence)}`);
@@ -336,7 +350,7 @@ const Panel = (() => {
         <button class="btn btn-primario" id="nuevo">${ic('mas')}Nuevo alumno</button>` })}
       <div class="buscador">${ic('buscar', 16)}<input class="input" id="buscar" placeholder="Buscar por nombre o DNI…"></div>
       <div class="filtros" id="filtros"></div>
-      <section class="panel tabla-caja"><table class="tabla"><thead><tr><th>Alumno</th><th>Actividades</th><th>Rutina</th><th>Última vez</th><th>Vencimiento</th><th>Cuota</th></tr></thead><tbody id="filas"></tbody></table></section>`;
+      <section class="panel tabla-caja"><table class="tabla"><thead><tr><th>Alumno</th><th>Actividades</th><th>Rutina</th><th>Última vez</th><th>Vencimiento</th><th>Cuota</th><th>Mensaje</th></tr></thead><tbody id="filas"></tbody></table></section>`;
 
     function pintar() {
       const n = (f) => lista.filter(f).length;
@@ -348,10 +362,12 @@ const Panel = (() => {
         .sort(porNombre);
       $('#filas').innerHTML = visibles.map((a) => {
         const est = U.estadoCuota(a.vence);
+        const wa = U.linkWhatsapp(a.telefono, mensajeWhatsapp(a, est));
         return `<tr class="clic" data-dni="${esc(a.dni)}"><td><div class="fila">${avatar(a.nombre)}<div class="datos"><strong>${esc(a.nombre)}</strong><small class="t-num">DNI ${esc(a.dni)}</small></div></div></td>
           <td>${esc(nombresActividades(a.actividades)) || '—'}</td><td class="t-suave">${esc(nombreRutina(a.rutinaId))}</td>
-          <td class="t-suave">${ultimaVez(fechaUltima(filas, a.dni))}</td><td class="t-num">${U.fechaNum(a.vence)}</td><td>${chipCuota(est)}</td></tr>`;
-      }).join('') || `<tr><td colspan="6">${lista.length ? 'Nadie coincide con la búsqueda.' : 'Todavía no cargaste alumnos. Empezá con “Nuevo alumno”.'}</td></tr>`;
+          <td class="t-suave">${ultimaVez(fechaUltima(filas, a.dni))}</td><td class="t-num">${U.fechaNum(a.vence)}</td><td>${chipCuota(est)}</td>
+          <td>${wa ? `<a class="btn btn-secundario btn-chico" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : '<span class="t-tenue">Sin celular</span>'}</td></tr>`;
+      }).join('') || `<tr><td colspan="7">${lista.length ? 'Nadie coincide con la búsqueda.' : 'Todavía no cargaste alumnos. Empezá con “Nuevo alumno”.'}</td></tr>`;
     }
 
     const alCambiar = () => { if (location.hash === '#/alumnos') App.enrutar(); else location.hash = '#/alumnos'; };
@@ -359,7 +375,7 @@ const Panel = (() => {
     $('#filtros').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; pintar(); } });
     $('#buscar').addEventListener('input', (e) => { texto = U.normalizar(e.target.value); pintar(); });
     $('#nuevo').addEventListener('click', abrirNuevo);
-    $('#filas').addEventListener('click', (e) => { const f = e.target.closest('[data-dni]'); if (f) location.hash = `#/alumnos/${f.dataset.dni}`; });
+    $('#filas').addEventListener('click', (e) => { if (e.target.closest('a')) return; const f = e.target.closest('[data-dni]'); if (f) location.hash = `#/alumnos/${f.dataset.dni}`; });
     $('#al-dia').addEventListener('click', async (e) => {
       const deudores = lista.filter(debe);
       if (!deudores.length) return U.aviso('Ya están todos al día');
@@ -400,7 +416,7 @@ const Panel = (() => {
           <p class="t-suave">${esc(est.detalle)}</p>
           <button class="btn btn-primario" id="cobrar">${ic('plata')}Registrar pago</button>
           <div><span class="etq">ÚLTIMOS PAGOS</span>
-            ${ordenados.map((p) => `<div class="fila" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--borde2);font-size:13px"><span class="t-num">${U.fechaNum(p.fecha)}</span><span class="t-num" style="font-weight:600">${U.plata(p.monto)}</span><span class="t-suave">vence <span class="t-num">${U.fechaNum(p.venceNuevo)}</span></span></div>`).join('') || '<p class="t-tenue" style="padding:10px 0">Todavía no hay pagos.</p>'}
+            ${ordenados.map((p) => `<div class="fila" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--borde2);font-size:13px"><span class="t-num">${U.fechaNum(p.fecha)}</span><span class="t-num" style="font-weight:600">${U.plata(p.monto)}</span>${p.concepto ? `<span class="t-suave">${esc(p.concepto)}</span>` : ''}<span class="t-suave">vence <span class="t-num">${U.fechaNum(p.venceNuevo)}</span></span></div>`).join('') || '<p class="t-tenue" style="padding:10px 0">Todavía no hay pagos.</p>'}
           </div></section>
         <section class="panel col" style="padding:22px;gap:14px" id="caja-calendario"></section></div>
       <div class="col" style="gap:18px">
@@ -665,5 +681,5 @@ const Panel = (() => {
     pintar();
   }
 
-  return { inicio, asistencia, actividades, alumnos, misAlumnos, precios, cuadro, profes };
+  return { mensajeWhatsapp, inicio, asistencia, actividades, alumnos, misAlumnos, precios, cuadro, profes };
 })();

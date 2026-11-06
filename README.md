@@ -24,7 +24,7 @@ Si un DNI es de dos cosas (por ejemplo, profe y alumno), la app pregunta cómo e
 - **Asistencia**: por turno en las clases, y lista simple en Musculación, como Gym App.
 - **Rutinas**: por días, con ejercicios, series, repeticiones y descanso. Se asignan a cada alumno.
 - **Ejercicios**: más de 1.000 con animación. Se pueden renombrar y crear propios.
-- **Clases**: turnos semanales por actividad, con cupo. Cada alumno se anota con un tilde en su ficha. Carga y descarga por Excel.
+- **Clases**: turnos semanales por actividad, con cupo. Dentro del turno se tildan los alumnos de esa actividad; el dueño carga el celular y les escribe por WhatsApp. Carga y descarga por Excel.
 - **Precios**: valor de cada actividad y combos.
 - **Cuadro**: por mes, alumnos, asistencia, lo cobrado, porcentaje de cada profe, lo pagado y cuándo.
 - **Profes**: DNI y actividades de cada uno.
@@ -32,6 +32,7 @@ Si un DNI es de dos cosas (por ejemplo, profe y alumno), la app pregunta cómo e
 
 ## Cómo se calculan las cuentas
 
+- **Cobro**: se elige su cuota, una actividad o un combo. El monto se completa solo y se puede cambiar.
 - **Cuota**: si las actividades coinciden justo con un combo, vale el combo. Si no, la suma de cada una.
   Al cambiar precios se actualiza sola, salvo en los alumnos con "Ponerle otro precio".
 - **Cobrado por actividad**: cada cobro se reparte entre las actividades del alumno, según el

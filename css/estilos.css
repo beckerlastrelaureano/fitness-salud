@@ -144,3 +144,10 @@ textarea.input { height: auto; min-height: 76px; padding: 10px 12px; resize: ver
 
 /* El atributo hidden gana siempre, aunque la pieza use flex. */
 .app [hidden] { display: none !important; }
+
+/* Alumnos dentro del turno */
+.anotar-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-top: 1px solid var(--borde2); }
+.anotar-fila:first-child { border-top: 0; }
+.anotar-fila input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--acento); flex-shrink: 0; }
+.anotar-contacto { display: flex; align-items: center; gap: 8px; }
+.anotar-contacto .input { width: 130px; height: 36px; }

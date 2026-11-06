@@ -1,6 +1,6 @@
 /**
  * clases.js — Agenda semanal de turnos, con cupo. Cada profe ve solo los
- * turnos de sus actividades. Los alumnos se anotan desde su ficha.
+ * turnos de sus actividades. Los alumnos se anotan con un tilde en el turno.
  */
 
 const Clases = (() => {
@@ -19,7 +19,8 @@ const Clases = (() => {
   }
 
   async function clases(cont) {
-    const [turnos, equipo, alumnos] = await Promise.all([UI.turnosVisibles(), Datos.listarEquipo(), Datos.listarAlumnos()]);
+    const [turnos, equipo, alumnos] = await Promise.all([UI.turnosVisibles(), Datos.listarEquipo(),
+      Datos.listarAlumnos({ conContacto: estado.sesion.rol === 'dueno' })]);
     const inicio = lunes();
     const fechaDe = (i) => U.sumarDias(inicio, i);
     const anotados = (t) => alumnos.filter((a) => (a.turnos || []).includes(t.id));
@@ -41,10 +42,9 @@ const Clases = (() => {
           }).join('') || '<p class="t-tenue" style="font-size:12px;padding:4px">Sin turnos</p>'}</div>`;
       }).join('')}</div>`;
 
-    $('#nuevo').addEventListener('click', () => modalTurno(null, equipo, []));
+    $('#nuevo').addEventListener('click', () => modalTurno(null, equipo, alumnos));
     $$('[data-id]', cont).forEach((b) => b.addEventListener('click', () => {
-      const t = turnos.find((x) => x.id === b.dataset.id);
-      modalTurno(t, equipo, anotados(t));
+      modalTurno(turnos.find((x) => x.id === b.dataset.id), equipo, alumnos);
     }));
     $('#bajar').addEventListener('click', (e) => conCarga(e.currentTarget, () => bajarExcel(turnos, anotados)));
     $('#excel').addEventListener('change', async (e) => {
@@ -56,17 +56,18 @@ const Clases = (() => {
     });
   }
 
-  function modalTurno(t, equipo, anotados) {
+  function modalTurno(t, equipo, alumnos) {
     const nuevo = !t;
     const propias = actividadesPropias();
     const { sesion } = estado;
+    const esDueno = sesion.rol === 'dueno';
     t = t || { dia: 0, hora: '18:00', actividad: propias[0]?.id, profe: sesion.rol === 'profe' ? sesion.nombre : '', cupo: 10 };
     const opcionesProfe = (actividad) => `<option value="">Sin profe</option>${equipo.filter((p) => (p.actividades || []).includes(actividad))
       .map((p) => `<option ${p.nombre === t.profe ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}`;
+    const elegidos = new Set(alumnos.filter((a) => (a.turnos || []).includes(t.id)).map((a) => a.dni));
+    const telefonos = new Map(alumnos.map((a) => [a.dni, a.telefono || '']));
     const d = U.modal(`<form class="modal-cuerpo"><h2 class="t-titulo">${nuevo ? 'Nuevo turno' : `${esc(nombreActividad(t.actividad))} · ${esc(t.hora)}`}</h2>
-      ${nuevo ? '' : `<div><span class="etq">ANOTADOS (${anotados.length} DE ${t.cupo})</span>
-        <p class="t-suave" style="margin-top:6px">${esc(anotados.map((a) => a.nombre).sort((x, y) => x.localeCompare(y, 'es')).join(', ')) || 'Todavía no hay alumnos anotados.'}</p></div>
-        <a class="btn btn-secundario" href="#/asistencia/${esc(t.actividad)}">${ic('check')}Pasar lista</a>`}
+      ${nuevo ? '' : `<a class="btn btn-secundario" href="#/asistencia/${esc(t.actividad)}">${ic('check')}Pasar lista</a>`}
       ${campo('Actividad', `<select class="input select" name="actividad">${propias.map((a) => `<option value="${a.id}" ${a.id === t.actividad ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select>`)}
       <div class="dos-columnas">
         ${campo('Día', `<select class="input select" name="dia">${DIAS.map((n, i) => `<option value="${i}" ${i === t.dia ? 'selected' : ''}>${n}</option>`).join('')}</select>`)}
@@ -76,21 +77,56 @@ const Clases = (() => {
         ${sesion.rol === 'dueno' ? campo('Profe', `<select class="input select" name="profe">${opcionesProfe(t.actividad)}</select>`) : ''}
         ${campo('Cupo', `<input class="input t-num" name="cupo" inputmode="numeric" required value="${esc(t.cupo)}">`)}
       </div>
-      <p class="t-tenue" style="font-size:12px">Los alumnos se anotan desde su ficha, en Alumnos.</p>
+      <div class="campo"><label id="titulo-anotados"></label><div class="picker-lista" id="anotar"></div></div>
       <div class="acciones">
         ${nuevo ? '' : '<button type="button" class="btn btn-peligro" id="borrar">Eliminar</button>'}
         <button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
         <button class="btn btn-primario">Guardar</button></div></form>`);
     const f = $('form', d);
-    f.actividad.addEventListener('change', () => { if (f.profe) f.profe.innerHTML = opcionesProfe(f.actividad.value); });
+
+    const deLaActividad = () => alumnos.filter((a) => (a.actividades || []).includes(f.actividad.value)).sort(porNombre);
+    const anotadosAhora = () => deLaActividad().filter((a) => elegidos.has(a.dni));
+    const contarAnotados = () => { $('#titulo-anotados', d).textContent = `Alumnos anotados: ${anotadosAhora().length} de ${f.cupo.value || 0}`; };
+
+    function enlaceWhatsapp(a) {
+      const link = U.linkWhatsapp(telefonos.get(a.dni), Panel.mensajeWhatsapp(a, U.estadoCuota(a.vence)));
+      return link ? `<a class="btn btn-secundario btn-chico" href="${esc(link)}" target="_blank" rel="noopener">WhatsApp</a>` : '';
+    }
+
+    // Un tilde por alumno de la actividad. El dueño ve además su celular.
+    function pintarAnotar() {
+      $('#anotar', d).innerHTML = deLaActividad().map((a) => `<div class="anotar-fila" data-dni="${esc(a.dni)}">
+        <label class="fila" style="flex:1 1 100%;min-width:0;cursor:pointer"><input type="checkbox" data-anotar ${elegidos.has(a.dni) ? 'checked' : ''}><span style="overflow-wrap:anywhere">${esc(a.nombre)}</span></label>
+        ${esDueno ? `<div class="anotar-contacto"><input class="input t-num" data-tel inputmode="tel" aria-label="Celular de ${esc(a.nombre)}" placeholder="Celular" value="${esc(telefonos.get(a.dni))}"><span data-wa>${enlaceWhatsapp(a)}</span></div>` : ''}
+      </div>`).join('') || '<p class="vacio-chico" style="border:0">No hay alumnos en esta actividad. Sumala en la ficha del alumno.</p>';
+      contarAnotados();
+    }
+
+    f.actividad.addEventListener('change', () => { if (f.profe) f.profe.innerHTML = opcionesProfe(f.actividad.value); pintarAnotar(); });
+    f.cupo.addEventListener('input', contarAnotados);
+    $('#anotar', d).addEventListener('change', (e) => {
+      const dni = e.target.closest('[data-dni]')?.dataset.dni;
+      if (!dni) return;
+      if (e.target.matches('[data-anotar]')) { if (e.target.checked) elegidos.add(dni); else elegidos.delete(dni); contarAnotados(); }
+      if (e.target.matches('[data-tel]')) {
+        telefonos.set(dni, e.target.value.trim());
+        e.target.closest('[data-dni]').querySelector('[data-wa]').innerHTML = enlaceWhatsapp(alumnos.find((a) => a.dni === dni));
+      }
+    });
+    pintarAnotar();
+
     f.addEventListener('submit', (e) => {
       e.preventDefault();
       const cupo = Number(U.soloDigitos(f.cupo.value)) || 0;
       if (!cupo) return U.aviso('Poné el cupo', 'error');
+      const anotados = anotadosAhora();
       if (cupo < anotados.length) return U.aviso(`Hay ${anotados.length} anotados y el cupo es ${cupo}`, 'error');
       const datos = { dia: Number(f.dia.value), hora: f.hora.value, actividad: f.actividad.value, profe: f.profe ? f.profe.value : t.profe, cupo };
       conCarga($('.btn-primario', f), async () => {
-        await Datos.guardarTurno(nuevo ? U.nuevoId() : t.id, datos);
+        const id = nuevo ? U.nuevoId() : t.id;
+        await Datos.guardarTurno(id, datos);
+        await Datos.anotarEnTurno(id, alumnos, anotados.map((a) => a.dni));
+        if (esDueno) await Promise.all(alumnos.filter((a) => telefonos.get(a.dni) !== (a.telefono || '')).map((a) => Datos.guardarTelefono(a, telefonos.get(a.dni))));
         d.close();
         U.aviso('Turno guardado');
         App.enrutar();

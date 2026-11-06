@@ -93,6 +93,24 @@ const Datos = (() => {
   const obtenerAlumno = (dni) => base.obtener('alumnos', dni);
   const asignarRutina = (dni, rutinaId) => base.actualizar('alumnos', dni, { rutinaId: rutinaId || null });
 
+  // Anota en un turno a los elegidos y saca al resto.
+  async function anotarEnTurno(turnoId, alumnos, elegidos) {
+    const cambios = alumnos.flatMap((a) => {
+      const antes = a.turnos || [];
+      const estaba = antes.includes(turnoId);
+      const queda = elegidos.includes(a.dni);
+      if (estaba === queda) return [];
+      a.turnos = queda ? [...antes, turnoId] : antes.filter((t) => t !== turnoId);
+      return [base.actualizar('alumnos', a.dni, { turnos: a.turnos })];
+    });
+    await Promise.all(cambios);
+  }
+
+  async function guardarTelefono(alumno, telefono) {
+    await base.guardar('contactos', alumno.dni, { telefono, notas: alumno.notas || '' });
+    alumno.telefono = telefono;
+  }
+
   // Pone al día sin registrar cobro: solo corre el vencimiento.
   async function ponerAlDia(alumno) {
     const { telefono, notas, id, estado, ...ficha } = alumno;
@@ -269,10 +287,10 @@ const Datos = (() => {
   const pagosDelMes = (mes) => base.listar('pagos', rangoDe(mes));
   const pagosDeAlumno = (dni) => base.listar('pagos', { campo: 'dni', desde: dni, hasta: dni });
 
-  async function registrarPago(alumno, { monto, meses }, negocioActual) {
+  async function registrarPago(alumno, { monto, meses, concepto, actividades }, negocioActual) {
     const venceNuevo = U.nuevoVencimiento(alumno.vence, meses);
-    await base.agregar('pagos', { dni: alumno.dni, nombre: alumno.nombre, monto, meses, fecha: U.hoy(),
-      reparto: Cuentas.reparto(monto, alumno.actividades || [], negocioActual), venceNuevo });
+    await base.agregar('pagos', { dni: alumno.dni, nombre: alumno.nombre, monto, meses, concepto, fecha: U.hoy(),
+      reparto: Cuentas.reparto(monto, actividades, negocioActual), venceNuevo });
     const { telefono, notas, id, estado, ...ficha } = alumno;
     await base.guardar('alumnos', alumno.dni, { ...ficha, vence: venceNuevo });
     return venceNuevo;
@@ -284,7 +302,7 @@ const Datos = (() => {
   return { get modo() { return base.modo; }, reiniciarDemo: () => base.reiniciar(), iniciar, onSesion, identificar,
     entrarAlumno, entrarProfe, entrarDueno, crearClaveDueno, salir,
     cambiarClave: (dni, actual, nueva) => base.cambiarClave(dni, actual, nueva),
-    listarAlumnos, guardarAlumno, borrarAlumno, obtenerAlumno, asignarRutina, ponerAlDia, negocio, guardarNegocio, aplicarPrecios,
+    listarAlumnos, guardarAlumno, borrarAlumno, obtenerAlumno, asignarRutina, anotarEnTurno, guardarTelefono, ponerAlDia, negocio, guardarNegocio, aplicarPrecios,
     publico, guardarPublico, listarEquipo, guardarProfe, borrarProfe,
     asistencia, guardarAsistencia, asistenciaTurno, guardarAsistenciaTurno, clasesDelMes, asistenciasDelMes, presencias, registrarVisita, visitasDelAlumno,
     listarRutinas, obtenerRutina, guardarRutina, borrarRutina, ejercicios, guardarEjercicio, borrarEjercicio, renombrarEjercicio,

@@ -22,9 +22,9 @@ service cloud.firestore {
       allow get: if true;
       allow list: if esEquipo();
       allow write: if esDueno();
-      // El profe puede asignar una rutina, nada más.
+      // El profe puede asignar rutina y anotar en turnos, nada más.
       allow update: if esProfe()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rutinaId']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rutinaId', 'turnos']);
     }
 
     // Teléfono y notas: solo el dueño.
