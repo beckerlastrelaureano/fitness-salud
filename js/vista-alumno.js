@@ -7,7 +7,7 @@ const VistaAlumno = (() => {
   const { $, $$, esc, ic } = U;
   const { estado, nombresActividades, primerNombre, chipCuota, conCarga, logoGym, avatar } = UI;
 
-  let raiz, alumno, rutina, visitas, catalogo;
+  let raiz, alumno, rutina, visitas, catalogo, turnos, clases;
   let temporizador = null;
 
   const clavePesos = () => `fitness-salud-pesos-${alumno.dni}`;
@@ -49,6 +49,7 @@ const VistaAlumno = (() => {
         <p class="t-suave">${esc(est.detalle)}</p>
         <div class="fila" style="justify-content:space-between"><span class="t-suave">${esc(nombresActividades(alumno.actividades)) || 'Sin actividad'}</span><strong class="t-num">${U.plata(alumno.monto)}</strong></div>
       </section>
+      ${bloqueClases()}
       ${rutina ? `
         <p class="etq">TU RUTINA · ${esc(rutina.nombre.toUpperCase())}</p>
         ${hoyRegistrada() ? `<p class="chip chip-verde" style="height:auto;padding:8px 12px;white-space:normal;align-self:flex-start">${ic('check')}Ya registraste tu asistencia de hoy. ¡Bien ahí!</p>` : `<p class="t-suave">Hoy te toca el Día ${toca}.</p>`}
@@ -61,7 +62,7 @@ const VistaAlumno = (() => {
           ${UI.dato({ titulo: 'Última vez', icono: 'reloj', numero: `<span style="font-size:18px">${ultima ? U.fechaNum(ultima.fecha, true) : '—'}</span>` })}
         </div>
         <button class="btn btn-secundario" id="completa">Ver rutina completa</button>
-        <button class="btn btn-secundario" id="pdf">${ic('descargar')}Descargar rutina en PDF</button>` : '<p class="t-suave">Todavía no tenés una rutina. Consultá con tu profe.</p>'}
+        <button class="btn btn-secundario" id="pdf">${ic('descargar')}Descargar rutina en PDF</button>` : (UI.usaRutinas(alumno.actividades) ? '<p class="t-suave">Todavía no tenés una rutina. Consultá con tu profe.</p>' : '')}
       ${wa ? `<a class="btn btn-primario" href="${esc(wa)}" target="_blank" rel="noopener">Escribirle al gimnasio</a>` : ''}
       <a class="btn btn-fantasma" href="#/instalar">${ic('celular')}Instalar la app</a>`);
 
@@ -70,6 +71,31 @@ const VistaAlumno = (() => {
       $('#completa').addEventListener('click', pintarCompleta);
       $('#pdf').addEventListener('click', imprimir);
     }
+  }
+
+  // Para quien viene a clases: próxima clase, su semana y cuánto vino este mes.
+  function proximaClase() {
+    const ahora = U.horaAhora();
+    const hoy = U.diaTurno(U.hoy());
+    const espera = (t) => {
+      const d = (t.dia - hoy + 7) % 7;
+      return d === 0 && t.hora <= ahora ? 7 : d;
+    };
+    return [...turnos].sort((a, b) => espera(a) - espera(b) || a.hora.localeCompare(b.hora))[0];
+  }
+
+  function bloqueClases() {
+    if (!turnos.length) return '';
+    const proxima = proximaClase();
+    const vino = clases.filter((c) => c.vino).length;
+    const orden = [...turnos].sort((a, b) => a.dia - b.dia || a.hora.localeCompare(b.hora));
+    return `<section class="panel col" style="padding:18px;gap:10px;border-color:var(--acento2)">
+        <span class="etq">PRÓXIMA CLASE</span>
+        <h2 class="t-titulo">${esc(UI.nombreActividad(proxima.actividad))}</h2>
+        <p class="t-suave">${esc(UI.textoTurno(proxima))}${proxima.profe ? ` · ${esc(proxima.profe)}` : ''}</p></section>
+      <section class="panel" style="overflow:hidden"><div class="panel-cab"><h2 class="t-titulo">Mis clases</h2></div>
+        ${orden.map((t) => `<div class="lista-fila" style="cursor:default"><div class="datos"><strong>${esc(UI.nombreActividad(t.actividad))}</strong><small>${esc(t.profe) || 'Sin profe'}</small></div><span class="t-num t-suave">${esc(UI.textoTurno(t))}</span></div>`).join('')}</section>
+      ${UI.dato({ titulo: 'Clases este mes', icono: 'fuego', numero: `${vino}<span class="t-tenue" style="font-size:18px"> de ${clases.length}</span>`, pie: vino ? '¡Seguí así!' : '' })}`;
   }
 
   function imagenDe(e) {
@@ -90,7 +116,7 @@ const VistaAlumno = (() => {
           <div><span class="etq">Series hechas</span><div class="series" style="margin-top:6px">${Array.from({ length: series }, (_, s) => `<button type="button" class="serie" data-desc="${esc(e.desc)}">${s + 1}</button>`).join('')}</div></div>
         </article>`;
       }).join('') || '<p class="t-suave">Este día no tiene ejercicios. Consultá con tu profe.</p>'}
-      ${hoyRegistrada()
+      ${!(alumno.actividades || []).includes('musculacion') ? '<p class="t-tenue" style="font-size:12px;text-align:center">Tu profe te marca la asistencia en clase.</p>' : hoyRegistrada()
         ? `<p class="chip chip-verde" style="height:auto;padding:10px 14px;align-self:center">${ic('check')}Asistencia de hoy registrada</p>`
         : `<button class="btn btn-exito" id="registrar">${ic('check')}Registrar asistencia de hoy</button>
            <p class="t-tenue" style="font-size:12px;text-align:center">Si no terminaste, tu profe te marca la asistencia.</p>`}`);
@@ -173,10 +199,15 @@ const VistaAlumno = (() => {
   async function mostrar(contenedor, sesion) {
     raiz = contenedor;
     alumno = await Datos.obtenerAlumno(sesion.dni);
-    const [r, v, c] = await Promise.all([alumno.rutinaId ? Datos.obtenerRutina(alumno.rutinaId) : null, Datos.visitasDelAlumno(alumno.dni), Datos.ejercicios()]);
+    const conRutina = alumno.rutinaId && UI.usaRutinas(alumno.actividades);
+    const [r, v, c, t] = await Promise.all([conRutina ? Datos.obtenerRutina(alumno.rutinaId) : null,
+      conRutina ? Datos.visitasDelAlumno(alumno.dni) : [], conRutina ? Datos.ejercicios() : [],
+      Promise.all((alumno.turnos || []).map(Datos.obtenerTurno))]);
     rutina = r;
     visitas = v;
     catalogo = c;
+    turnos = t.filter(Boolean);
+    clases = await Datos.clasesDelMes(alumno.dni, turnos);
     pintarInicio();
   }
 

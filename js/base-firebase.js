@@ -5,19 +5,20 @@
  * firebase.* directamente.
  *
  * Colecciones:
- *   alumnos/{dni}      { dni, nombre, actividades, monto, montoManual, vence, fechaAlta }
+ *   alumnos/{dni}      { dni, nombre, actividades, turnos, rutinaId, monto, montoManual, vence, fechaAlta }
  *   contactos/{dni}    { telefono, notas }  (solo el dueño)
  *   equipo/{dni}       { dni, nombre, rol: 'profe', actividades }
  *   claves/{dni}       { creada }  (marca que el dueño ya creó su contraseña)
  *   config/publico     { whatsapp, nombre, acento, tema, clasesActivas, logo }
  *   config/negocio     { precios, combos, porcentajes }  (solo el dueño)
- *   asistencias/{fecha_actividad}  { fecha, actividad, presentes }
+ *   asistencias/{fecha_turno}  { fecha, actividad, turnoId, presentes }  (sala: fecha_actividad)
  *   pagos/{id}         { dni, nombre, monto, meses, fecha, reparto, venceNuevo }
  *   pagosProfes/{id}   { profeDni, profeNombre, actividad, periodo, monto, fecha }
  *   rutinas/{id}       { nombre, autor, dias: [{ ejercicios: [{ ejId, nombre, series, reps, desc }] }] }
  *   ejercicios/{id}    { nombre, grupo, gif }  (los que crea el gimnasio)
  *   config/ejercicios  { renombres }
- *   turnos/{id}        { dia, hora, clase, profe, cupo, anotados }
+ *   turnos/{id}        { dia, hora, actividad, profe, cupo }  (los anotados están en alumnos.turnos)
+ *   marcas/{fecha_turno_dni} { fecha, turnoId, dni }  (el alumno lee acá sus propias clases)
  *   visitas/{fecha_dni} { dni, fecha, dia, hora, por }  (asistencia que registra el alumno)
  *
  * Cada persona del equipo tiene una cuenta "DNI@fitness-salud.app". Los
@@ -66,7 +67,8 @@ const BaseFirebase = (() => {
 
   const listar = conError(async (col, filtro) => {
     let q = db.collection(col);
-    if (filtro) q = q.where(filtro.campo, '>=', filtro.desde).where(filtro.campo, '<=', filtro.hasta);
+    if (filtro?.igual !== undefined) q = q.where(filtro.campo, '==', filtro.igual);
+    else if (filtro) q = q.where(filtro.campo, '>=', filtro.desde).where(filtro.campo, '<=', filtro.hasta);
     const s = await q.get();
     return s.docs.map((d) => ({ id: d.id, ...d.data() }));
   });

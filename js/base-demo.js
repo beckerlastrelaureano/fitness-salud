@@ -28,6 +28,7 @@ const BaseDemo = (() => {
       ['33222111', 'Lucía Fernández', '2302 33-4455', ['pilates'], -20, 22000],
       ['38555666', 'Nicolás Ruiz', '2302 47-1212', ['musculacion', 'spinning', 'stretching'], 25, 44000],
       ['36777888', 'Camila Sosa', '2302 51-9090', ['stretching', 'yoga'], 6, 28000],
+      ['34111333', 'Paula Ríos', '2302 44-7788', ['funcional'], 15, 19000],
       ['42111999', 'Bruno Castro', '', ['spinning'], null, 16000],
     ];
     const d = {
@@ -37,17 +38,17 @@ const BaseDemo = (() => {
       config: {
         publico: { whatsapp: '2302 00-0000', clasesActivas: true },
         negocio: {
-          precios: { pilates: 22000, yoga: 18000, stretching: 14000, musculacion: 20000, spinning: 16000 },
+          precios: { pilates: 22000, yoga: 18000, stretching: 14000, musculacion: 20000, spinning: 16000, funcional: 19000 },
           combos: [
             { id: 'c1', nombre: 'Cuerpo y mente', actividades: ['pilates', 'yoga'], precio: 30000 },
             { id: 'c2', nombre: 'Sala y bici', actividades: ['musculacion', 'spinning'], precio: 32000 },
           ],
-          porcentajes: { pilates: 40, yoga: 40, stretching: 35, musculacion: 30, spinning: 40 },
+          porcentajes: { pilates: 40, yoga: 40, stretching: 35, musculacion: 30, spinning: 40, funcional: 35 },
         },
       },
       equipo: {
         27333444: { dni: '27333444', nombre: 'Laura Méndez', rol: 'profe', actividades: ['pilates', 'yoga'] },
-        28555666: { dni: '28555666', nombre: 'Diego Ríos', rol: 'profe', actividades: ['musculacion'] },
+        28555666: { dni: '28555666', nombre: 'Diego Ríos', rol: 'profe', actividades: ['musculacion', 'funcional'] },
         29777888: { dni: '29777888', nombre: 'Vale Torres', rol: 'profe', actividades: ['spinning', 'stretching'] },
       },
     };
@@ -61,7 +62,7 @@ const BaseDemo = (() => {
         d.pagos[`p${i}`] = { dni, nombre, monto, meses: 1, fecha: h, reparto, venceNuevo: d.alumnos[dni].vence };
       }
     });
-    for (const [act, dias] of [['pilates', [1, 3, 5]], ['yoga', [2, 4, 6]], ['stretching', [2, 5]], ['musculacion', [1, 2, 3]], ['spinning', [1, 4]]]) {
+    for (const [act, dias] of [['musculacion', [1, 2, 3]]]) {
       for (const n of dias) {
         const fecha = pasado(n) >= dia(1) ? pasado(n) : dia(1);
         const presentes = Object.values(d.alumnos).filter((a) => a.actividades.includes(act)).map((a) => a.dni);
@@ -79,11 +80,16 @@ const BaseDemo = (() => {
     d.alumnos[28999111].rutinaId = 'r1';
     d.alumnos[38555666].rutinaId = 'r1';
     d.turnos = {
-      t1: { dia: 0, hora: '08:00', clase: 'Pilates', profe: 'Laura Méndez', cupo: 6, anotados: ['Martina López', 'Lucía Fernández'] },
-      t2: { dia: 0, hora: '19:00', clase: 'Spinning', profe: 'Vale Torres', cupo: 10, anotados: ['Tomás Díaz'] },
-      t3: { dia: 2, hora: '09:00', clase: 'Yoga', profe: 'Laura Méndez', cupo: 2, anotados: ['Sofía Gómez', 'Camila Sosa'] },
-      t4: { dia: 4, hora: '18:00', clase: 'Stretching', profe: 'Vale Torres', cupo: 8, anotados: [] },
+      t1: { dia: 0, hora: '08:00', actividad: 'pilates', profe: 'Laura Méndez', cupo: 6 },
+      t2: { dia: 0, hora: '19:00', actividad: 'spinning', profe: 'Vale Torres', cupo: 10 },
+      t3: { dia: 2, hora: '09:00', actividad: 'yoga', profe: 'Laura Méndez', cupo: 2 },
+      t4: { dia: 4, hora: '18:00', actividad: 'stretching', profe: 'Vale Torres', cupo: 8 },
+      t5: { dia: 1, hora: '19:30', actividad: 'funcional', profe: 'Diego Ríos', cupo: 10 },
+      t6: { dia: U.diaTurno(h) === 6 ? 5 : U.diaTurno(h), hora: '10:00', actividad: 'pilates', profe: 'Laura Méndez', cupo: 6 },
     };
+    const anotar = { 30111222: ['t1', 't3', 't6'], 33222111: ['t1', 't6'], 35444777: ['t3'], 36777888: ['t4'], 40123456: ['t2'], 38555666: ['t2', 't4'], 34111333: ['t5'] };
+    for (const [dni, turnos] of Object.entries(anotar)) d.alumnos[dni].turnos = turnos;
+    d.alumnos[34111333].rutinaId = 'r1';
     d.visitas = { [`${h}_28999111`]: { dni: '28999111', fecha: h, dia: 1, hora: '09:30', por: 'alumno' } };
     d.pagosProfes.pp1 = { profeDni: '28555666', profeNombre: 'Diego Ríos', actividad: 'musculacion',
       periodo: mes, monto: 5000, fecha: h };
@@ -100,7 +106,8 @@ const BaseDemo = (() => {
   async function listar(col, filtro) {
     await esperar();
     let lista = Object.entries(tabla(col)).map(([id, d]) => ({ id, ...copia(d) }));
-    if (filtro) lista = lista.filter((d) => d[filtro.campo] >= filtro.desde && d[filtro.campo] <= filtro.hasta);
+    if (filtro?.igual !== undefined) lista = lista.filter((d) => d[filtro.campo] === filtro.igual);
+    else if (filtro) lista = lista.filter((d) => d[filtro.campo] >= filtro.desde && d[filtro.campo] <= filtro.hasta);
     return lista;
   }
 

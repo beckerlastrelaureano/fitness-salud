@@ -27,11 +27,15 @@ const CONFIG = {
   // Cuántos días antes del vencimiento una cuota pasa a "vence pronto".
   diasAviso: 7,
 
+  // tipo "clase": tiene turnos, y el profe pasa lista por turno.
+  // tipo "sala": sin turnos, como Gym App: el alumno viene con su rutina.
+  // rutinas: la actividad usa rutinas y ejercicios.
   actividades: [
-    { id: "pilates", nombre: "Pilates" },
-    { id: "yoga", nombre: "Yoga" },
-    { id: "stretching", nombre: "Stretching" },
-    { id: "musculacion", nombre: "Musculación" },
-    { id: "spinning", nombre: "Spinning" }
+    { id: "pilates", nombre: "Pilates", tipo: "clase" },
+    { id: "yoga", nombre: "Yoga", tipo: "clase" },
+    { id: "stretching", nombre: "Stretching", tipo: "clase" },
+    { id: "spinning", nombre: "Spinning", tipo: "clase" },
+    { id: "funcional", nombre: "Funcional", tipo: "clase", rutinas: true },
+    { id: "musculacion", nombre: "Musculación", tipo: "sala", rutinas: true }
   ]
 };

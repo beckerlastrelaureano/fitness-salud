@@ -3,8 +3,8 @@
  * -----------------------------------------------------------------------
  * Hay una sola entrada: se pone el DNI y la app sabe quién es.
  *   Dueño   DNI + contraseña. Ve todo.
- *   Profe   DNI. Ve solo sus actividades, rutinas, ejercicios y clases.
- *   Alumno  DNI. Ve su cuota y su rutina del día.
+ *   Profe   DNI. Ve solo sus actividades. Rutinas y ejercicios, solo si las usa.
+ *   Alumno  DNI. Ve su cuota, sus clases y su rutina.
  *
  * Las secciones van en el # de la dirección: #/alumnos, #/alumnos/30111222…
  */
@@ -14,15 +14,22 @@ const App = (() => {
   const { estado, conCarga, campo, logoGym, aplicarMarca, avatar } = UI;
   const raiz = () => $('#app');
   let pedidoInstalar = null;
+  let pantalla = 0;
+
+  // Un profe ve rutinas y clases solo si sus actividades las usan.
+  const delProfe = (cumple) => estado.sesion.rol === 'dueno' || estado.sesion.actividades.some((id) => cumple(UI.actividadDe(id)));
+  const conRutinas = () => delProfe((a) => a?.rutinas);
+  const conClases = () => estado.gym.clasesActivas && delProfe((a) => a?.tipo === 'clase');
 
   const SECCIONES = [
     { id: 'inicio', nombre: 'Inicio', icono: 'inicio', ver: Panel.inicio, solo: 'dueno' },
     { id: 'actividades', nombre: 'Actividades', icono: 'clases', ver: Panel.actividades, solo: 'dueno' },
     { id: 'alumnos', nombre: 'Alumnos', icono: 'alumnos', ver: Panel.alumnos, solo: 'dueno' },
     { id: 'asistencia', nombre: 'Asistencia', icono: 'calendario', ver: Panel.asistencia },
-    { id: 'rutinas', nombre: 'Rutinas', icono: 'rutinas', ver: Rutinas.rutinas },
-    { id: 'ejercicios', nombre: 'Ejercicios', icono: 'pesa', ver: Rutinas.ejercicios },
-    { id: 'clases', nombre: 'Clases', icono: 'tabla', ver: Clases.clases, activa: () => estado.gym.clasesActivas },
+    { id: 'mis-alumnos', nombre: 'Mis alumnos', icono: 'alumnos', ver: Panel.misAlumnos, solo: 'profe' },
+    { id: 'rutinas', nombre: 'Rutinas', icono: 'rutinas', ver: Rutinas.rutinas, activa: conRutinas },
+    { id: 'ejercicios', nombre: 'Ejercicios', icono: 'pesa', ver: Rutinas.ejercicios, activa: conRutinas },
+    { id: 'clases', nombre: 'Clases', icono: 'tabla', ver: Clases.clases, activa: conClases },
     { id: 'precios', nombre: 'Precios', icono: 'plata', ver: Panel.precios, solo: 'dueno' },
     { id: 'cuadro', nombre: 'Cuadro', icono: 'tendencia', ver: Panel.cuadro, solo: 'dueno' },
     { id: 'profes', nombre: 'Profes', icono: 'profes', ver: Panel.profes, solo: 'dueno' },
@@ -47,6 +54,8 @@ const App = (() => {
   }
 
   async function enrutar() {
+    pantalla += 1;
+    const esta = pantalla;
     document.querySelectorAll('dialog[open]').forEach((d) => d.close());
     const [seccion, param] = location.hash.slice(2).split('/');
     try {
@@ -55,11 +64,14 @@ const App = (() => {
       if (!sesion) return vistaDni();
       if (sesion.rol === 'alumno') return await VistaAlumno.mostrar(raiz(), sesion);
       const lista = seccionesDe(sesion.rol);
+      if (!lista.length) throw new Error('Sin secciones');
       const activa = lista.find((s) => s.id === seccion) || lista[0];
       pintarMenu(lista, activa);
       const cont = $('#contenido');
       await activa.ver(cont, param);
     } catch (e) {
+      // Si ya se abrió otra pantalla, esta quedó vieja: su error no importa.
+      if (esta !== pantalla) return;
       console.error(e);
       mostrarError(e);
     }

@@ -11,20 +11,20 @@ Hay una sola pantalla: se pone el DNI y la app sabe quién es.
 | Quién | Entra con | Qué ve |
 |---|---|---|
 | **Dueño** | DNI + contraseña | Todo |
-| **Profe** | DNI | Asistencia de sus actividades, rutinas, ejercicios y clases |
-| **Alumno** | DNI | Su cuota y su rutina del día |
+| **Profe** | DNI | Sus alumnos, sus turnos y su asistencia. Rutinas y ejercicios solo en Musculación y Funcional |
+| **Alumno** | DNI | Su cuota, sus clases y su rutina del día |
 
 Si un DNI es de dos cosas (por ejemplo, profe y alumno), la app pregunta cómo entrar.
 
 ## Qué tiene el dueño
 
 - **Inicio**: alumnos activos, quién vino hoy, quién debe, cuotas por vencer y quién hace días que no viene.
-- **Actividades**: Pilates, Yoga, Stretching, Musculación y Spinning, con sus alumnos y su asistencia.
+- **Actividades**: Pilates, Yoga, Stretching, Spinning, Funcional y Musculación, con sus alumnos y su asistencia.
 - **Alumnos**: DNI, celular, actividades y cuánto debe pagar. Ficha con cobros, calendario de asistencia y rutina.
-- **Asistencia**: lista por actividad y por fecha.
+- **Asistencia**: por turno en las clases, y lista simple en Musculación, como Gym App.
 - **Rutinas**: por días, con ejercicios, series, repeticiones y descanso. Se asignan a cada alumno.
 - **Ejercicios**: más de 1.000 con animación. Se pueden renombrar y crear propios.
-- **Clases**: agenda semanal con cupo y anotados. Carga y descarga por Excel.
+- **Clases**: turnos semanales por actividad, con cupo. Cada alumno se anota con un tilde en su ficha. Carga y descarga por Excel.
 - **Precios**: valor de cada actividad y combos.
 - **Cuadro**: por mes, alumnos, asistencia, lo cobrado, porcentaje de cada profe, lo pagado y cuándo.
 - **Profes**: DNI y actividades de cada uno.

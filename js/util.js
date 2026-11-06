@@ -28,6 +28,8 @@ const U = (() => {
     const t = `${NOMBRES_DIA[d.getDay()]} ${d.getDate()} de ${NOMBRES_MES[d.getMonth()]}`;
     return t.charAt(0).toUpperCase() + t.slice(1);
   }
+  // Día de la agenda de turnos: 0 lunes … 5 sábado, 6 domingo.
+  const diaTurno = (iso) => (deISO(iso).getDay() + 6) % 7;
   const diaSemana = (iso) => NOMBRES_DIA[deISO(iso).getDay()].slice(0, 3);
   // Fecha con números: 05/11/2026 (o 05/11 si se pide corta).
   function fechaNum(iso, corta) {
@@ -177,7 +179,7 @@ const U = (() => {
     });
   }
 
-  return { hoy, mesActual, nombreMes, fechaLarga, diaSemana, fechaNum, horaAhora, sumarMeses, sumarDias, diasHasta,
+  return { hoy, mesActual, nombreMes, fechaLarga, diaSemana, diaTurno, fechaNum, horaAhora, sumarMeses, sumarDias, diasHasta,
     fechaCorta, nuevoVencimiento, estadoCuota, esc, plata, soloDigitos, normalizar, nuevoId, ic, linkWhatsapp,
     $, $$, aviso, modal, confirmar, leerImagen, cargarScript };
 })();

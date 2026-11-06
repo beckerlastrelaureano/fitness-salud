@@ -5,7 +5,7 @@
 
 const Panel = (() => {
   const { $, $$, esc, ic } = U;
-  const { estado, nombreActividad, nombresActividades, porNombre, primerNombre, chipCuota, avatar, cabecera, conCarga, campo,
+  const { estado, actividadDe, usaRutinas, turnosVisibles, textoTurno, nombreActividad, nombresActividades, porNombre, primerNombre, chipCuota, avatar, cabecera, conCarga, campo,
     eleccionActividades, leerEleccion, panelVacio, dato } = UI;
 
   const fechaUltima = (filas, dni) => filas.filter((p) => p.dni === dni).map((p) => p.fecha).sort().pop() || null;
@@ -108,7 +108,61 @@ const Panel = (() => {
     await cargar();
   }
 
-  async function asistencia(cont) {
+  // Lista de un turno: el profe elige fecha y turno, y tilda quién vino.
+  async function panelTurnos(cont, actividad, alumnos, turnos) {
+    const propios = turnos.filter((t) => t.actividad === actividad).sort((a, b) => a.hora.localeCompare(b.hora));
+    let fecha = U.hoy();
+    let turnoId = null;
+    cont.innerHTML = `<section class="panel" style="overflow:hidden">
+      <div class="panel-cab" style="align-items:flex-end;flex-wrap:wrap">
+        <div><h2 class="t-titulo">${esc(nombreActividad(actividad))}</h2><span class="sub" id="dia-texto"></span></div>
+        <div class="campo"><label>Fecha</label><input type="date" class="input t-num" id="fecha" value="${fecha}" max="${fecha}" style="width:170px"></div>
+      </div>
+      <div class="filtros" id="turnos-dia" style="padding:0 18px 14px"></div>
+      <div id="lista-asistencia"></div>
+      <div style="padding:14px 18px;border-top:1px solid var(--borde2)" id="caja-guardar"><button class="btn btn-primario btn-ancho" id="guardar-asistencia">Guardar asistencia</button></div>
+    </section>`;
+    const contar = () => {
+      const n = $$('#lista-asistencia input:checked', cont).length;
+      $('#guardar-asistencia', cont).textContent = `Guardar asistencia (${n})`;
+    };
+
+    async function pintar() {
+      const delDia = propios.filter((t) => t.dia === U.diaTurno(fecha));
+      if (!delDia.some((t) => t.id === turnoId)) turnoId = delDia[0]?.id || null;
+      $('#dia-texto', cont).textContent = U.fechaLarga(fecha);
+      $('#turnos-dia', cont).innerHTML = delDia.map((t) => `<button type="button" class="filtro ${t.id === turnoId ? 'activo' : ''}" data-t="${esc(t.id)}">${esc(t.hora)}${t.profe ? ` · ${esc(primerNombre(t.profe))}` : ''}</button>`).join('');
+      $('#caja-guardar', cont).hidden = true;
+      if (!turnoId) { $('#lista-asistencia', cont).innerHTML = panelVacio('No hay turnos este día.'); return; }
+      const anotados = alumnos.filter((a) => (a.turnos || []).includes(turnoId)).sort(porNombre);
+      const presentes = await Datos.asistenciaTurno(fecha, turnoId);
+      $('#lista-asistencia', cont).innerHTML = anotados.map((a) => `<label class="lista-fila">${avatar(a.nombre)}
+        <div class="datos"><strong>${esc(a.nombre)}</strong><small>DNI ${esc(a.dni)}</small></div>
+        <input type="checkbox" value="${esc(a.dni)}" style="width:22px;height:22px;accent-color:var(--acento)" ${presentes.includes(a.dni) ? 'checked' : ''}></label>`).join('')
+        || panelVacio('Todavía no hay alumnos anotados en este turno.');
+      $('#caja-guardar', cont).hidden = !anotados.length;
+      contar();
+    }
+
+    $('#turnos-dia', cont).addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) { turnoId = b.dataset.t; pintar(); } });
+    $('#lista-asistencia', cont).addEventListener('change', contar);
+    $('#fecha', cont).addEventListener('change', (e) => { fecha = e.target.value || U.hoy(); pintar(); });
+    $('#guardar-asistencia', cont).addEventListener('click', (e) => {
+      const presentes = $$('#lista-asistencia input:checked', cont).map((i) => i.value);
+      const turno = propios.find((t) => t.id === turnoId);
+      conCarga(e.currentTarget, async () => {
+        await Datos.guardarAsistenciaTurno(fecha, turno, presentes);
+        U.aviso(`Asistencia guardada: ${presentes.length} presente${presentes.length === 1 ? '' : 's'}`);
+      }).then(contar);
+    });
+    await pintar();
+  }
+
+  // Clases con turno; Musculación con la lista simple, como Gym App.
+  const panelActividad = (cont, id, alumnos, turnos) =>
+    (actividadDe(id)?.tipo === 'clase' ? panelTurnos(cont, id, alumnos, turnos) : panelLista(cont, id, alumnos));
+
+  async function asistencia(cont, param) {
     const { sesion } = estado;
     const propias = sesion.rol === 'profe' ? sesion.actividades : CONFIG.actividades.map((a) => a.id);
     cont.innerHTML = cabecera({ titulo: 'Asistencia', sub: sesion.rol === 'profe' ? 'Marcá quién vino a tu clase.' : '' });
@@ -116,21 +170,21 @@ const Panel = (() => {
       cont.insertAdjacentHTML('beforeend', '<p class="t-suave">Todavía no tenés actividades asignadas. Avisale al dueño.</p>');
       return;
     }
-    const alumnos = await Datos.listarAlumnos();
+    const [alumnos, turnos] = await Promise.all([Datos.listarAlumnos(), turnosVisibles()]);
     cont.insertAdjacentHTML('beforeend', '<div class="filtros" id="filtros-act"></div><div id="lista-act"></div>');
     const abrir = (id) => {
       $('#filtros-act').innerHTML = propias.map((a) => `<button type="button" class="filtro ${a === id ? 'activo' : ''}" data-act="${a}">${esc(nombreActividad(a))}</button>`).join('');
-      panelLista($('#lista-act'), id, alumnos);
+      panelActividad($('#lista-act'), id, alumnos, turnos);
     };
     $('#filtros-act').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b) abrir(b.dataset.act); });
-    abrir(propias[0]);
+    abrir(propias.includes(param) ? param : propias[0]);
   }
 
   // ---------------------------------------------------------------------
   // Actividades
   // ---------------------------------------------------------------------
   async function actividades(cont, id) {
-    const [alumnos, negocio, equipo] = await Promise.all([Datos.listarAlumnos(), Datos.negocio(), Datos.listarEquipo()]);
+    const [alumnos, negocio, equipo, turnos] = await Promise.all([Datos.listarAlumnos(), Datos.negocio(), Datos.listarEquipo(), Datos.listarTurnos()]);
     if (!id) {
       cont.innerHTML = `${cabecera({ titulo: 'Actividades', sub: 'Tocá una para ver sus alumnos y pasar lista.' })}
         <div class="grilla-actividades">${CONFIG.actividades.map((a) => {
@@ -154,7 +208,7 @@ const Panel = (() => {
             <div class="datos"><strong>${esc(a.nombre)}</strong><small>Vino ${vino} de ${clases.length} clase${clases.length === 1 ? '' : 's'}</small></div>
             ${chipCuota(U.estadoCuota(a.vence))}</a>`;
         }).join('') || panelVacio('Todavía no hay alumnos en esta actividad.')}</section></div>`;
-    await panelLista($('#pasar-lista'), id, alumnos);
+    await panelActividad($('#pasar-lista'), id, alumnos, turnos);
   }
 
   // ---------------------------------------------------------------------
@@ -199,19 +253,21 @@ const Panel = (() => {
     });
   }
 
-  function modalAlumno(a, { alumnos, negocio, rutinas }, alTerminar) {
+  function modalAlumno(a, { alumnos, negocio, rutinas, turnos }, alTerminar) {
     const nuevo = !a;
-    a = a || { dni: '', nombre: '', telefono: '', actividades: [], monto: 0, montoManual: false, vence: '', notas: '', rutinaId: null };
+    a = a || { dni: '', nombre: '', telefono: '', actividades: [], turnos: [], monto: 0, montoManual: false, vence: '', notas: '', rutinaId: null };
+    const elegidos = new Set(a.turnos || []);
     const d = U.modal(`<form class="modal-cuerpo">
       <h2 class="t-titulo">${nuevo ? 'Nuevo alumno' : 'Editar alumno'}</h2>
       ${campo('Nombre y apellido', `<input class="input" name="nombre" required value="${esc(a.nombre)}">`)}
       ${campo('DNI', `<input class="input t-num" name="dni" required inputmode="numeric" placeholder="Sin puntos" value="${esc(a.dni)}" ${nuevo ? '' : 'disabled'}>`)}
       ${campo('Celular', `<input class="input" name="telefono" inputmode="tel" value="${esc(a.telefono)}" placeholder="Para mandarle mensajes">`)}
       ${campo('Actividades', eleccionActividades('act', a.actividades))}
+      <div id="turnos-alumno" class="col" style="gap:10px"></div>
       <p class="t-suave">Debería pagar: <strong id="sugerido"></strong> <small id="detalle-precio"></small></p>
       <label class="interruptor"><span class="t-suave">Ponerle otro precio</span><input type="checkbox" name="manual" ${a.montoManual ? 'checked' : ''}></label>
       <div id="campo-monto">${campo('Cuota ($)', `<input class="input t-num" name="monto" inputmode="numeric" value="${esc(a.monto || '')}">`)}</div>
-      ${campo('Rutina', `<select class="input select" name="rutina"><option value="">Sin rutina</option>${rutinas.map((r) => `<option value="${esc(r.id)}" ${r.id === a.rutinaId ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select>`)}
+      <div id="campo-rutina">${campo('Rutina', `<select class="input select" name="rutina"><option value="">Sin rutina</option>${rutinas.map((r) => `<option value="${esc(r.id)}" ${r.id === a.rutinaId ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select>`)}</div>
       ${campo('Pagado hasta', `<input class="input t-num" name="vence" type="date" value="${esc(a.vence || '')}">`, nuevo ? 'Si no pagó todavía, dejalo vacío y usá “Cobrar”.' : 'Solo para corregir. Los pagos se cargan con “Cobrar”.')}
       ${campo('Notas', `<textarea class="input" name="notas" rows="2">${esc(a.notas)}</textarea>`)}
       <div class="acciones"><button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
@@ -224,8 +280,26 @@ const Panel = (() => {
       $('#detalle-precio', d).textContent = precio.detalle;
       $('#campo-monto', d).hidden = !f.manual.checked;
     }
-    f.addEventListener('change', actualizarPrecio);
+    // Un tilde por cada turno de las actividades elegidas.
+    function pintarTurnos() {
+      const clases = leerEleccion(f, 'act').filter((id) => actividadDe(id)?.tipo === 'clase');
+      $('#turnos-alumno', d).innerHTML = clases.map((id) => {
+        const propios = turnos.filter((t) => t.actividad === id).sort((x, y) => x.dia - y.dia || x.hora.localeCompare(y.hora));
+        return campo(`Turnos de ${nombreActividad(id)}`, propios.length ? `<div class="eleccion">${propios.map((t) => {
+          const ocupados = alumnos.filter((x) => x.dni !== a.dni && (x.turnos || []).includes(t.id)).length;
+          const lleno = ocupados >= t.cupo && !elegidos.has(t.id);
+          return `<label><input type="checkbox" data-turno="${esc(t.id)}" ${elegidos.has(t.id) ? 'checked' : ''} ${lleno ? 'disabled' : ''}><span class="filtro" ${lleno ? 'style="opacity:.5"' : ''}>${esc(textoTurno(t))}${lleno ? ' · completo' : ''}</span></label>`;
+        }).join('')}</div>` : '<p class="t-tenue" style="font-size:12px">Todavía no hay turnos. Crealos en Clases.</p>');
+      }).join('');
+      $('#campo-rutina', d).hidden = !usaRutinas(leerEleccion(f, 'act'));
+    }
+    $('#turnos-alumno', d).addEventListener('change', (e) => {
+      const id = e.target.dataset.turno;
+      if (id) { if (e.target.checked) elegidos.add(id); else elegidos.delete(id); }
+    });
+    f.addEventListener('change', (e) => { actualizarPrecio(); if (e.target.name === 'act') pintarTurnos(); });
     actualizarPrecio();
+    pintarTurnos();
 
     f.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -235,9 +309,10 @@ const Panel = (() => {
       if (!dni) return U.aviso('El DNI es obligatorio', 'error');
       if (nuevo && alumnos.some((x) => x.dni === dni)) return U.aviso('Ya hay un alumno con ese DNI', 'error');
       if (!elegidas.length) return U.aviso('Elegí al menos una actividad', 'error');
-      const datos = { ...a, dni, nombre: f.nombre.value.trim(), telefono: f.telefono.value.trim(), actividades: elegidas, montoManual,
+      const turnosAlumno = turnos.filter((t) => elegidos.has(t.id) && elegidas.includes(t.actividad)).map((t) => t.id);
+      const datos = { ...a, dni, nombre: f.nombre.value.trim(), telefono: f.telefono.value.trim(), actividades: elegidas, turnos: turnosAlumno, montoManual,
         monto: montoManual ? Number(U.soloDigitos(f.monto.value)) || 0 : Cuentas.precioDe(elegidas, negocio).monto,
-        rutinaId: f.rutina.value || null, vence: f.vence.value || null, notas: f.notas.value.trim(), fechaAlta: a.fechaAlta || U.hoy() };
+        rutinaId: usaRutinas(elegidas) ? f.rutina.value || null : null, vence: f.vence.value || null, notas: f.notas.value.trim(), fechaAlta: a.fechaAlta || U.hoy() };
       conCarga($('.btn-primario', f), async () => {
         await Datos.guardarAlumno(datos);
         d.close();
@@ -250,8 +325,8 @@ const Panel = (() => {
   async function alumnos(cont, dni) {
     if (dni && dni !== 'nuevo') return ficha(cont, dni);
     const hoy = U.hoy();
-    const [lista, negocio, rutinas, filas] = await Promise.all([Datos.listarAlumnos({ conContacto: true }), Datos.negocio(),
-      Datos.listarRutinas(), Datos.presencias(U.sumarDias(hoy, -60), hoy)]);
+    const [lista, negocio, rutinas, filas, turnos] = await Promise.all([Datos.listarAlumnos({ conContacto: true }), Datos.negocio(),
+      Datos.listarRutinas(), Datos.presencias(U.sumarDias(hoy, -60), hoy), Datos.listarTurnos()]);
     let filtro = 'todos';
     let texto = '';
     const debe = (a) => ['vencida', 'sin-pago'].includes(U.estadoCuota(a.vence).clave);
@@ -279,8 +354,8 @@ const Panel = (() => {
       }).join('') || `<tr><td colspan="6">${lista.length ? 'Nadie coincide con la búsqueda.' : 'Todavía no cargaste alumnos. Empezá con “Nuevo alumno”.'}</td></tr>`;
     }
 
-    const alCambiar = () => { location.hash = '#/alumnos'; App.enrutar(); };
-    const abrirNuevo = () => modalAlumno(null, { alumnos: lista, negocio, rutinas }, alCambiar);
+    const alCambiar = () => { if (location.hash === '#/alumnos') App.enrutar(); else location.hash = '#/alumnos'; };
+    const abrirNuevo = () => modalAlumno(null, { alumnos: lista, negocio, rutinas, turnos }, alCambiar);
     $('#filtros').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; pintar(); } });
     $('#buscar').addEventListener('input', (e) => { texto = U.normalizar(e.target.value); pintar(); });
     $('#nuevo').addEventListener('click', abrirNuevo);
@@ -301,8 +376,8 @@ const Panel = (() => {
 
   // Ficha de un alumno
   async function ficha(cont, dni) {
-    const [lista, negocio, rutinas, pagos] = await Promise.all([Datos.listarAlumnos({ conContacto: true }), Datos.negocio(),
-      Datos.listarRutinas(), Datos.pagosDeAlumno(dni)]);
+    const [lista, negocio, rutinas, pagos, turnos] = await Promise.all([Datos.listarAlumnos({ conContacto: true }), Datos.negocio(),
+      Datos.listarRutinas(), Datos.pagosDeAlumno(dni), Datos.listarTurnos()]);
     const a = lista.find((x) => x.dni === dni);
     if (!a) { cont.innerHTML = `${cabecera({ titulo: 'No encontramos ese alumno' })}<a class="btn btn-secundario" href="#/alumnos" style="width:max-content">Volver a Alumnos</a>`; return; }
     let mes = U.mesActual();
@@ -331,9 +406,10 @@ const Panel = (() => {
       <div class="col" style="gap:18px">
         <section class="panel col" style="padding:22px;gap:12px"><h2 class="t-titulo">Actividades</h2>
           <p>${esc(nombresActividades(a.actividades)) || 'Sin actividad'}</p>
+          ${turnos.filter((t) => (a.turnos || []).includes(t.id)).map((t) => `<p class="t-suave">${esc(nombreActividad(t.actividad))}: ${esc(textoTurno(t))}</p>`).join('')}
           ${a.telefono ? `<p class="t-suave">Celular: <span class="t-num">${esc(a.telefono)}</span></p>` : ''}
           ${a.notas ? `<p class="t-suave">${esc(a.notas)}</p>` : ''}</section>
-        <section class="panel col" style="padding:22px;gap:12px"><h2 class="t-titulo">Rutina</h2>
+        <section class="panel col" style="padding:22px;gap:12px" ${usaRutinas(a.actividades) ? '' : 'hidden'}><h2 class="t-titulo">Rutina</h2>
           ${campo('Rutina asignada', `<select class="input select" id="rutina"><option value="">Sin rutina</option>${rutinas.map((r) => `<option value="${esc(r.id)}" ${r.id === a.rutinaId ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select>`)}
           ${a.rutinaId ? `<a class="btn btn-secundario" href="#/rutinas/${esc(a.rutinaId)}">Ver rutina</a>` : ''}</section></div></div>`;
 
@@ -358,7 +434,7 @@ const Panel = (() => {
       $('#mes-despues').addEventListener('click', () => mover(1));
     }
 
-    $('#editar').addEventListener('click', () => modalAlumno(a, { alumnos: lista, negocio, rutinas }, rehacer));
+    $('#editar').addEventListener('click', () => modalAlumno(a, { alumnos: lista, negocio, rutinas, turnos }, rehacer));
     $('#cobrar').addEventListener('click', () => modalCobro(a, negocio, rehacer));
     $('#rutina').addEventListener('change', async (e) => {
       try { await Datos.asignarRutina(dni, e.target.value); U.aviso('Rutina asignada'); rehacer(); }
@@ -373,6 +449,18 @@ const Panel = (() => {
       });
     });
     await pintarCalendario();
+  }
+
+  // Alumnos del profe: solo los de sus actividades, sin datos de contacto.
+  async function misAlumnos(cont) {
+    const { sesion } = estado;
+    const [lista, turnos] = await Promise.all([Datos.listarAlumnos(), turnosVisibles()]);
+    const propios = lista.filter((a) => (a.actividades || []).some((x) => sesion.actividades.includes(x))).sort(porNombre);
+    const turnosDe = (a) => turnos.filter((t) => (a.turnos || []).includes(t.id));
+    cont.innerHTML = `${cabecera({ titulo: 'Mis alumnos', sub: nombresActividades(sesion.actividades) })}
+      <section class="panel" style="overflow:hidden">${propios.map((a) => `<div class="lista-fila" style="cursor:default">${avatar(a.nombre)}
+        <div class="datos"><strong>${esc(a.nombre)}</strong><small>${esc(nombresActividades((a.actividades || []).filter((x) => sesion.actividades.includes(x))))}</small>
+          ${turnosDe(a).length ? `<small>${esc(turnosDe(a).map(textoTurno).join(' · '))}</small>` : ''}</div></div>`).join('') || panelVacio('Todavía no hay alumnos en tus actividades.')}</section>`;
   }
 
   // ---------------------------------------------------------------------
@@ -577,5 +665,5 @@ const Panel = (() => {
     pintar();
   }
 
-  return { inicio, asistencia, actividades, alumnos, precios, cuadro, profes };
+  return { inicio, asistencia, actividades, alumnos, misAlumnos, precios, cuadro, profes };
 })();

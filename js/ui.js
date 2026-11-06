@@ -14,6 +14,12 @@ const UI = (() => {
   const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
   const primerNombre = (nombre) => (nombre || '').split(' ')[0];
 
+  const actividadDe = (id) => CONFIG.actividades.find((a) => a.id === id);
+  const actividadesDeClase = () => CONFIG.actividades.filter((a) => a.tipo === 'clase');
+  const usaRutinas = (ids) => (ids || []).some((id) => actividadDe(id)?.rutinas);
+  const turnosVisibles = () => Datos.listarTurnos(estado.sesion.rol === 'profe' ? estado.sesion.actividades : undefined);
+  const textoTurno = (t) => `${['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][t.dia]} ${t.hora}`;
+
   const CHIP_CUOTA = { 'al-dia': 'chip-verde', 'por-vencer': 'chip-amarillo', vencida: 'chip-rojo', 'sin-pago': 'chip-neutro' };
   const chipCuota = (est) => `<span class="chip ${CHIP_CUOTA[est.clave]}"><span class="punto"></span>${esc(est.texto)}</span>`;
 
@@ -71,6 +77,6 @@ const UI = (() => {
     return href ? `<a class="tarjeta dato" href="${href}">${dentro}</a>` : `<div class="tarjeta dato">${dentro}</div>`;
   }
 
-  return { estado, nombreActividad, nombresActividades, iniciales, porNombre, primerNombre, chipCuota, avatar, logoGym,
+  return { estado, actividadDe, actividadesDeClase, usaRutinas, turnosVisibles, textoTurno, nombreActividad, nombresActividades, iniciales, porNombre, primerNombre, chipCuota, avatar, logoGym,
     aplicarMarca, cabecera, conCarga, campo, eleccionActividades, leerEleccion, panelVacio, dato };
 })();

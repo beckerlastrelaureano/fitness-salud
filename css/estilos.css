@@ -141,3 +141,6 @@ textarea.input { height: auto; min-height: 76px; padding: 10px 12px; resize: ver
   .solo-impresion td, .solo-impresion th { border-bottom: 1px solid #ccc; padding: 4pt; text-align: left; }
   body, html { background: #fff !important; }
 }
+
+/* El atributo hidden gana siempre, aunque la pieza use flex. */
+.app [hidden] { display: none !important; }

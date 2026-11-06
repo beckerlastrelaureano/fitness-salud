@@ -142,6 +142,30 @@ const Datos = (() => {
   const rangoDe = (mes) => ({ campo: 'fecha', desde: `${mes}-01`, hasta: `${mes}-31` });
   const visitasDe = (fecha) => base.listar('visitas', { campo: 'fecha', desde: fecha, hasta: fecha });
 
+  // Lista de un turno. La marca aparte le deja al alumno ver sus propias clases.
+  const idMarca = (fecha, turnoId, dni) => `${fecha}_${turnoId}_${dni}`;
+  async function asistenciaTurno(fecha, turnoId) {
+    return (await base.obtener('asistencias', `${fecha}_${turnoId}`))?.presentes || [];
+  }
+
+  async function guardarAsistenciaTurno(fecha, turno, presentes) {
+    const anteriores = await asistenciaTurno(fecha, turno.id);
+    await base.guardar('asistencias', `${fecha}_${turno.id}`, { fecha, actividad: turno.actividad, turnoId: turno.id, presentes });
+    await Promise.all([
+      ...presentes.filter((d) => !anteriores.includes(d)).map((dni) => base.guardar('marcas', idMarca(fecha, turno.id, dni), { fecha, turnoId: turno.id, dni })),
+      ...anteriores.filter((d) => !presentes.includes(d)).map((dni) => base.borrar('marcas', idMarca(fecha, turno.id, dni))),
+    ]);
+  }
+
+  // Clases del mes en curso a las que tenía que venir el alumno, y si vino.
+  async function clasesDelMes(dni, turnos) {
+    const hoy = U.hoy();
+    const fechas = Array.from({ length: Number(hoy.slice(8)) }, (_, i) => `${U.mesActual()}-${String(i + 1).padStart(2, '0')}`);
+    const previstas = turnos.flatMap((t) => fechas.filter((f) => U.diaTurno(f) === t.dia).map((fecha) => ({ fecha, turno: t })));
+    const marcas = await Promise.all(previstas.map((p) => base.obtener('marcas', idMarca(p.fecha, p.turno.id, dni))));
+    return previstas.map((p, i) => ({ ...p, vino: Boolean(marcas[i]) }));
+  }
+
   async function asistencia(fecha, actividad) {
     const propia = (await base.obtener('asistencias', `${fecha}_${actividad}`))?.presentes || [];
     if (actividad !== ACT_RUTINAS) return propia;
@@ -230,7 +254,14 @@ const Datos = (() => {
   }
 
   // Clases
-  const listarTurnos = () => base.listar('turnos');
+  // Sin actividades trae todos los turnos (dueño). A un profe se le piden los
+  // suyos: las reglas no le dejan listar los de otra actividad.
+  async function listarTurnos(actividades) {
+    if (!actividades) return base.listar('turnos');
+    const listas = await Promise.all(actividades.map((a) => base.listar('turnos', { campo: 'actividad', igual: a })));
+    return listas.flat();
+  }
+  const obtenerTurno = (id) => base.obtener('turnos', id);
   const guardarTurno = (id, datos) => base.guardar('turnos', id, datos);
   const borrarTurno = (id) => base.borrar('turnos', id);
 
@@ -255,7 +286,7 @@ const Datos = (() => {
     cambiarClave: (dni, actual, nueva) => base.cambiarClave(dni, actual, nueva),
     listarAlumnos, guardarAlumno, borrarAlumno, obtenerAlumno, asignarRutina, ponerAlDia, negocio, guardarNegocio, aplicarPrecios,
     publico, guardarPublico, listarEquipo, guardarProfe, borrarProfe,
-    asistencia, guardarAsistencia, asistenciasDelMes, presencias, registrarVisita, visitasDelAlumno,
+    asistencia, guardarAsistencia, asistenciaTurno, guardarAsistenciaTurno, clasesDelMes, asistenciasDelMes, presencias, registrarVisita, visitasDelAlumno,
     listarRutinas, obtenerRutina, guardarRutina, borrarRutina, ejercicios, guardarEjercicio, borrarEjercicio, renombrarEjercicio,
-    listarTurnos, guardarTurno, borrarTurno, pagosDelMes, pagosDeAlumno, registrarPago, listarPagosProfes, registrarPagoProfe };
+    listarTurnos, obtenerTurno, guardarTurno, borrarTurno, pagosDelMes, pagosDeAlumno, registrarPago, listarPagosProfes, registrarPagoProfe };
 })();

@@ -53,9 +53,10 @@ const Rutinas = (() => {
 
   function modalAsignar(rutina, alumnos) {
     const { sesion } = estado;
+    const conRutina = alumnos.filter((a) => UI.usaRutinas(a.actividades));
     const propios = sesion.rol === 'profe'
-      ? alumnos.filter((a) => (a.actividades || []).some((x) => sesion.actividades.includes(x)))
-      : alumnos;
+      ? conRutina.filter((a) => (a.actividades || []).some((x) => sesion.actividades.includes(x) && UI.actividadDe(x)?.rutinas))
+      : conRutina;
     const d = U.modal(`<div class="modal-cuerpo"><h2 class="t-titulo">Asignar ${esc(rutina.nombre)}</h2>
       <div class="buscador">${ic('buscar', 16)}<input class="input" id="buscar" placeholder="Buscar alumno…"></div>
       <div class="picker-lista" id="lista"></div>

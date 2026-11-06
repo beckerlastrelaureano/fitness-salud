@@ -5,8 +5,8 @@ rules_version = '2';
 // js/config.js). Se pegan en Firebase > Firestore Database > Reglas > Publicar.
 //
 // - Dueño: entra con DNI y contraseña. Puede todo.
-// - Profes: entran con DNI. Pasan asistencia de sus actividades y manejan rutinas y clases.
-// - Alumnos: entran con DNI, sin sesión. Leen su ficha y su rutina y registran su día.
+// - Profes: entran con DNI. Pasan asistencia y manejan los turnos de sus actividades.
+// - Alumnos: entran con DNI, sin sesión. Leen su ficha, sus turnos y su rutina y registran su día.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -16,6 +16,7 @@ service cloud.firestore {
     function rutaEquipo() { return /databases/$(database)/documents/equipo/$(dniSesion()); }
     function esProfe() { return conSesion() && exists(rutaEquipo()); }
     function esEquipo() { return esDueno() || esProfe(); }
+    function actividadesProfe() { return get(rutaEquipo()).data.actividades; }
 
     match /alumnos/{dni} {
       allow get: if true;
@@ -66,8 +67,21 @@ service cloud.firestore {
       allow write: if esEquipo();
     }
 
+    // Un turno no guarda nombres. El alumno lee los suyos por id. Cada profe
+    // lista y cambia solo los turnos de sus actividades.
     match /turnos/{id} {
-      allow read, write: if esEquipo();
+      allow get: if true;
+      allow list: if esDueno() || (esProfe() && resource.data.actividad in actividadesProfe());
+      allow create: if esDueno() || (esProfe() && request.resource.data.actividad in actividadesProfe());
+      allow update: if esDueno() || (esProfe() && resource.data.actividad in actividadesProfe()
+        && request.resource.data.actividad in actividadesProfe());
+      allow delete: if esDueno() || (esProfe() && resource.data.actividad in actividadesProfe());
+    }
+
+    // Una marca por alumno y clase. El alumno lee las suyas por id.
+    match /marcas/{id} {
+      allow get: if true;
+      allow create, delete: if esEquipo();
     }
 
     // Asistencia que registra el alumno. Solo puede crear la de un DNI que
@@ -89,7 +103,7 @@ service cloud.firestore {
     match /asistencias/{id} {
       allow read: if esEquipo();
       allow write: if esDueno()
-        || (esProfe() && request.resource.data.actividad in get(rutaEquipo()).data.actividades);
+        || (esProfe() && request.resource.data.actividad in actividadesProfe());
     }
 
     match /pagos/{id} {
