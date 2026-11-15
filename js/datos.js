@@ -19,7 +19,10 @@ const Datos = (() => {
   async function sesionDeCuenta(dni) {
     if (esDueno(dni)) return { rol: 'dueno', dni, nombre: 'Dueño' };
     const e = await base.obtener('equipo', dni);
-    return e ? { rol: 'profe', dni, nombre: e.nombre, actividades: e.actividades || [] } : null;
+    if (!e) return null;
+    // Carga de alumnos: solo da de alta alumnos, sin actividades ni cobros.
+    if (e.rol === 'carga') return { rol: 'carga', dni, nombre: e.nombre, actividades: [] };
+    return { rol: 'profe', dni, nombre: e.nombre, actividades: e.actividades || [] };
   }
 
   async function sesionDeAlumno() {
@@ -47,7 +50,7 @@ const Datos = (() => {
     if (esDueno(dni)) opciones.push('dueno');
     if (profe) opciones.push('profe');
     if (alumno) opciones.push('alumno');
-    return { opciones, tieneClave: Boolean(clave) };
+    return { opciones, tieneClave: Boolean(clave), carga: profe?.rol === 'carga' };
   }
 
   function entrarAlumno(dni, nombre) {
@@ -97,18 +100,55 @@ const Datos = (() => {
     await base.borrar('contactos', dni);
   }
 
+  // Alta y edición desde Carga de alumnos: nombre, DNI y celular. Las
+  // actividades las suma después cada profe, y la cuota la maneja el dueño.
+  async function cargarAlumno({ dni, nombre, telefono, notas = '' }, nuevo) {
+    if (nuevo) {
+      await base.guardar('alumnos', dni, { dni, nombre, actividades: [], turnos: [], monto: 0, montoManual: false,
+        vence: null, rutinaId: null, fechaAlta: U.hoy() });
+    } else {
+      await base.actualizar('alumnos', dni, { nombre });
+    }
+    await base.guardar('contactos', dni, { telefono, notas });
+  }
+
+  // El profe suma un alumno a una de sus actividades.
+  async function sumarActividad(alumno, actividad) {
+    if ((alumno.actividades || []).includes(actividad)) return;
+    alumno.actividades = [...(alumno.actividades || []), actividad];
+    await base.actualizar('alumnos', alumno.dni, { actividades: alumno.actividades });
+  }
+
+  // Los profes suman actividades sin ver los precios: cuando el dueño abre
+  // Alumnos, se acomoda la cuota de quien no la tiene puesta a mano.
+  async function acomodarCuotas(alumnos, negocioActual) {
+    const cambios = alumnos.filter((a) => !a.montoManual).flatMap((a) => {
+      const { monto } = Cuentas.precioDe(a.actividades || [], negocioActual);
+      if (monto === a.monto) return [];
+      a.monto = monto;
+      return [base.actualizar('alumnos', a.dni, { monto })];
+    });
+    await Promise.all(cambios);
+  }
+
   const obtenerAlumno = (dni) => base.obtener('alumnos', dni);
   const asignarRutina = (dni, rutinaId) => base.actualizar('alumnos', dni, { rutinaId: rutinaId || null });
 
-  // Anota en un turno a los elegidos y saca al resto.
-  async function anotarEnTurno(turnoId, alumnos, elegidos) {
+  // Anota en un turno a los elegidos y saca al resto. Si un elegido todavía
+  // no hace esa actividad, se la suma.
+  async function anotarEnTurno(turnoId, alumnos, elegidos, actividad) {
     const cambios = alumnos.flatMap((a) => {
       const antes = a.turnos || [];
       const estaba = antes.includes(turnoId);
       const queda = elegidos.includes(a.dni);
       if (estaba === queda) return [];
       a.turnos = queda ? [...antes, turnoId] : antes.filter((t) => t !== turnoId);
-      return [base.actualizar('alumnos', a.dni, { turnos: a.turnos })];
+      const campos = { turnos: a.turnos };
+      if (queda && actividad && !(a.actividades || []).includes(actividad)) {
+        a.actividades = [...(a.actividades || []), actividad];
+        campos.actividades = a.actividades;
+      }
+      return [base.actualizar('alumnos', a.dni, campos)];
     });
     await Promise.all(cambios);
   }
@@ -155,7 +195,7 @@ const Datos = (() => {
 
   async function guardarProfe(profe, nuevo) {
     if (nuevo) await base.crearCuentaAparte(profe.dni, claveProfe(profe.dni));
-    await base.guardar('equipo', profe.dni, { ...profe, rol: 'profe' });
+    await base.guardar('equipo', profe.dni, { ...profe, rol: profe.rol || 'profe' });
   }
 
   const borrarProfe = (dni) => base.borrar('equipo', dni);
@@ -309,7 +349,7 @@ const Datos = (() => {
   return { get modo() { return base.modo; }, reiniciarDemo: () => base.reiniciar(), iniciar, onSesion, identificar,
     entrarAlumno, entrarProfe, entrarDueno, duenoSinClave, crearClaveDueno, salir,
     cambiarClave: (dni, actual, nueva) => base.cambiarClave(dni, actual, nueva),
-    listarAlumnos, guardarAlumno, borrarAlumno, obtenerAlumno, asignarRutina, anotarEnTurno, guardarTelefono, ponerAlDia, negocio, guardarNegocio, aplicarPrecios,
+    listarAlumnos, guardarAlumno, cargarAlumno, sumarActividad, acomodarCuotas, borrarAlumno, obtenerAlumno, asignarRutina, anotarEnTurno, guardarTelefono, ponerAlDia, negocio, guardarNegocio, aplicarPrecios,
     publico, guardarPublico, listarEquipo, guardarProfe, borrarProfe,
     asistencia, guardarAsistencia, asistenciaTurno, guardarAsistenciaTurno, clasesDelMes, asistenciasDelMes, presencias, registrarVisita, visitasDelAlumno,
     listarRutinas, obtenerRutina, guardarRutina, borrarRutina, ejercicios, guardarEjercicio, borrarEjercicio, renombrarEjercicio,

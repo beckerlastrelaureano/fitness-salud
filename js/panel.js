@@ -69,6 +69,40 @@ const Panel = (() => {
   // ---------------------------------------------------------------------
   // Asistencia (dueño y profes)
   // ---------------------------------------------------------------------
+
+  // Lista con tildes y buscador. Muestra primero los de la actividad; al
+  // buscar aparecen también los del resto del gimnasio.
+  function listaParaSumar(candidatos, actividad) {
+    const propios = candidatos.filter((a) => (a.actividades || []).includes(actividad)).sort(porNombre);
+    const otros = candidatos.filter((a) => !(a.actividades || []).includes(actividad)).sort(porNombre);
+    const fila = (a, otro) => `<label class="anotar-fila" data-busca="${esc(U.normalizar(`${a.nombre} ${a.dni}`))}" ${otro ? 'data-otro hidden' : ''} style="cursor:pointer">
+      <input type="checkbox" value="${esc(a.dni)}"><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(a.nombre)}</span>
+      ${otro ? `<small class="chip chip-neutro" style="height:22px">Nuevo en ${esc(nombreActividad(actividad))}</small>` : ''}<small class="t-tenue t-num">${esc(a.dni)}</small></label>`;
+    return `<div class="buscador">${ic('buscar', 16)}<input class="input" data-buscar placeholder="Buscar en todos los alumnos por nombre o DNI…"></div>
+      <div class="picker-lista">${propios.map((a) => fila(a, false)).join('')}${otros.map((a) => fila(a, true)).join('')}
+        <p class="vacio-chico" data-sin-resultado style="border:0" ${propios.length ? 'hidden' : ''}>${candidatos.length ? `Buscá por nombre o DNI para sumar alumnos a ${esc(nombreActividad(actividad))}.` : 'No hay alumnos para sumar.'}</p></div>`;
+  }
+
+  // Filtra la lista de listaParaSumar. Sin texto: los de la actividad y los ya tildados.
+  function activarBuscador(raiz) {
+    const input = $('[data-buscar]', raiz);
+    const filtrar = () => {
+      const texto = U.normalizar(input.value.trim());
+      let visibles = 0;
+      $$('[data-busca]', raiz).forEach((fila) => {
+        const tildado = $('input', fila).checked;
+        const ver = texto ? fila.dataset.busca.includes(texto) : (!fila.hasAttribute('data-otro') || tildado);
+        fila.hidden = !ver;
+        if (ver) visibles++;
+      });
+      const vacio = $('[data-sin-resultado]', raiz);
+      vacio.hidden = visibles > 0;
+      if (texto) vacio.textContent = 'Nadie coincide con la búsqueda. Si es nuevo, pedí que lo den de alta.';
+    };
+    input.addEventListener('input', filtrar);
+    return filtrar;
+  }
+
   async function panelLista(cont, actividad, alumnos) {
     const lista = alumnos.filter((a) => (a.actividades || []).includes(actividad)).sort(porNombre);
     let fecha = U.hoy();
@@ -131,7 +165,6 @@ const Panel = (() => {
       const n = $$('#lista-asistencia input:checked', cont).length;
       $('#guardar-asistencia', cont).textContent = `Guardar asistencia (${n})`;
     };
-    const deLaActividad = () => alumnos.filter((a) => (a.actividades || []).includes(actividad)).sort(porNombre);
     const anotadosEn = (id) => alumnos.filter((a) => (a.turnos || []).includes(id)).sort(porNombre);
 
     async function pintar() {
@@ -154,17 +187,15 @@ const Panel = (() => {
       contar();
     }
 
-    // Elegir alumnos de la actividad que todavía no están en el turno.
+    // Elegir alumnos que todavía no están en el turno: los de la actividad o,
+    // buscando, cualquiera del gimnasio (se le suma la actividad).
     function modalSumar() {
       const turno = propios.find((t) => t.id === turnoId);
-      const libres = deLaActividad().filter((a) => !(a.turnos || []).includes(turnoId));
+      const libres = alumnos.filter((a) => !(a.turnos || []).includes(turnoId));
       const lugar = Math.max(0, turno.cupo - anotadosEn(turnoId).length);
       const d = U.modal(`<form class="modal-cuerpo"><h2 class="t-titulo">Sumar a ${esc(nombreActividad(actividad))} · ${esc(textoTurno(turno))}</h2>
         <p class="t-suave" id="sumar-lugar"></p>
-        ${libres.length > 6 ? `<div class="buscador">${ic('buscar', 16)}<input class="input" id="buscar-sumar" placeholder="Buscar por nombre o DNI…"></div>` : ''}
-        <div class="picker-lista">${libres.map((a) => `<label class="anotar-fila" data-busca="${esc(U.normalizar(`${a.nombre} ${a.dni}`))}" style="cursor:pointer">
-          <input type="checkbox" value="${esc(a.dni)}"><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(a.nombre)}</span><small class="t-tenue t-num">${esc(a.dni)}</small></label>`).join('')
-          || `<p class="vacio-chico" style="border:0">Todos los alumnos de ${esc(nombreActividad(actividad))} ya están en esta clase.</p>`}</div>
+        ${listaParaSumar(libres, actividad)}
         <div class="acciones"><button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
           <button class="btn btn-primario" ${libres.length ? '' : 'disabled'}>Sumar a la clase</button></div></form>`);
       const f = $('form', d);
@@ -174,11 +205,7 @@ const Panel = (() => {
         $('#sumar-lugar', d).textContent = `Quedan ${lugar} lugar${lugar === 1 ? '' : 'es'} de ${turno.cupo}.${n ? ` Elegiste ${n}.` : ''}`;
       };
       f.addEventListener('change', mostrarLugar);
-      const buscar = $('#buscar-sumar', d);
-      if (buscar) buscar.addEventListener('input', () => {
-        const texto = U.normalizar(buscar.value);
-        $$('[data-busca]', d).forEach((fila) => { fila.hidden = !fila.dataset.busca.includes(texto); });
-      });
+      activarBuscador(d);
       mostrarLugar();
       f.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -186,7 +213,7 @@ const Panel = (() => {
         if (!nuevos.length) return U.aviso('Elegí al menos un alumno', 'error');
         if (nuevos.length > lugar) return U.aviso(`El cupo es ${turno.cupo}: ${lugar === 1 ? 'queda 1 lugar' : `quedan ${lugar} lugares`}`, 'error');
         conCarga($('.btn-primario', f), async () => {
-          await Datos.anotarEnTurno(turnoId, alumnos, [...anotadosEn(turnoId).map((a) => a.dni), ...nuevos]);
+          await Datos.anotarEnTurno(turnoId, alumnos, [...anotadosEn(turnoId).map((a) => a.dni), ...nuevos], actividad);
           nuevos.forEach((dni) => sumados.add(dni));
           d.close();
           U.aviso(`${nuevos.length === 1 ? 'Alumno sumado' : `${nuevos.length} alumnos sumados`}. Ahora guardá la asistencia.`);
@@ -394,6 +421,7 @@ const Panel = (() => {
     const hoy = U.hoy();
     const [lista, negocio, rutinas, filas, turnos] = await Promise.all([Datos.listarAlumnos({ conContacto: true }), Datos.negocio(),
       Datos.listarRutinas(), Datos.presencias(U.sumarDias(hoy, -60), hoy), Datos.listarTurnos()]);
+    await Datos.acomodarCuotas(lista, negocio);
     let filtro = 'todos';
     let texto = '';
     const debe = (a) => ['vencida', 'sin-pago'].includes(U.estadoCuota(a.vence).clave);
@@ -447,6 +475,7 @@ const Panel = (() => {
   async function ficha(cont, dni) {
     const [lista, negocio, rutinas, pagos, turnos] = await Promise.all([Datos.listarAlumnos({ conContacto: true }), Datos.negocio(),
       Datos.listarRutinas(), Datos.pagosDeAlumno(dni), Datos.listarTurnos()]);
+    await Datos.acomodarCuotas(lista, negocio);
     const a = lista.find((x) => x.dni === dni);
     if (!a) { cont.innerHTML = `${cabecera({ titulo: 'No encontramos ese alumno' })}<a class="btn btn-secundario" href="#/alumnos" style="width:max-content">Volver a Alumnos</a>`; return; }
     let mes = U.mesActual();
@@ -526,10 +555,98 @@ const Panel = (() => {
     const [lista, turnos] = await Promise.all([Datos.listarAlumnos(), turnosVisibles()]);
     const propios = lista.filter((a) => (a.actividades || []).some((x) => sesion.actividades.includes(x))).sort(porNombre);
     const turnosDe = (a) => turnos.filter((t) => (a.turnos || []).includes(t.id));
-    cont.innerHTML = `${cabecera({ titulo: 'Mis alumnos', sub: nombresActividades(sesion.actividades) })}
+    cont.innerHTML = `${cabecera({ titulo: 'Mis alumnos', sub: nombresActividades(sesion.actividades),
+        acciones: sesion.actividades.length ? `<button class="btn btn-primario" id="sumar">${ic('mas')}Sumar alumno</button>` : '' })}
       <section class="panel" style="overflow:hidden">${propios.map((a) => `<div class="lista-fila" style="cursor:default">${avatar(a.nombre)}
         <div class="datos"><strong>${esc(a.nombre)}</strong><small>${esc(nombresActividades((a.actividades || []).filter((x) => sesion.actividades.includes(x))))}</small>
-          ${turnosDe(a).length ? `<small>${esc(turnosDe(a).map(textoTurno).join(' · '))}</small>` : ''}</div></div>`).join('') || panelVacio('Todavía no hay alumnos en tus actividades.')}</section>`;
+          ${turnosDe(a).length ? `<small>${esc(turnosDe(a).map(textoTurno).join(' · '))}</small>` : ''}</div></div>`).join('') || panelVacio('Todavía no hay alumnos en tus actividades. Sumalos con “Sumar alumno”.')}</section>`;
+    const sumar = $('#sumar', cont);
+    if (sumar) sumar.addEventListener('click', () => modalSumarActividad(lista));
+  }
+
+  // El profe busca en el listado general y suma alumnos a una de sus actividades.
+  function modalSumarActividad(lista) {
+    const { sesion } = estado;
+    let actividad = sesion.actividades[0];
+    const d = U.modal(`<form class="modal-cuerpo"><h2 class="t-titulo">Sumar alumno</h2>
+      ${sesion.actividades.length > 1 ? campo('Actividad', `<select class="input select" name="actividad">${sesion.actividades.map((id) => `<option value="${esc(id)}">${esc(nombreActividad(id))}</option>`).join('')}</select>`) : `<p class="t-suave">A ${esc(nombreActividad(actividad))}</p>`}
+      <div id="lista-sumar"></div>
+      <p class="t-tenue" style="font-size:12px">Para anotarlo en un horario, sumalo desde el turno en Clases o en Asistencia.</p>
+      <div class="acciones"><button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
+        <button class="btn btn-primario">Sumar</button></div></form>`);
+    const f = $('form', d);
+    const pintar = () => {
+      $('#lista-sumar', d).innerHTML = listaParaSumar(lista.filter((a) => !(a.actividades || []).includes(actividad)), actividad);
+      const filtrar = activarBuscador(d);
+      filtrar();
+    };
+    if (f.actividad) f.actividad.addEventListener('change', () => { actividad = f.actividad.value; pintar(); });
+    pintar();
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const elegidos = $$('#lista-sumar input:checked', d).map((i) => i.value);
+      if (!elegidos.length) return U.aviso('Elegí al menos un alumno', 'error');
+      conCarga($('.btn-primario', f), async () => {
+        await Promise.all(elegidos.map((dni) => Datos.sumarActividad(lista.find((a) => a.dni === dni), actividad)));
+        d.close();
+        U.aviso(`${elegidos.length === 1 ? 'Alumno sumado' : `${elegidos.length} alumnos sumados`} a ${nombreActividad(actividad)}`);
+        App.enrutar();
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Carga de alumnos: alta con nombre, DNI y celular. Sin cuotas ni cobros.
+  // ---------------------------------------------------------------------
+  async function cargaAlumnos(cont) {
+    const lista = await Datos.listarAlumnos({ conContacto: true });
+    let texto = '';
+    cont.innerHTML = `${cabecera({ titulo: 'Alumnos', sub: 'Cargá a los alumnos. Después cada profe los suma a sus clases.',
+        acciones: `<button class="btn btn-primario" id="nuevo">${ic('mas')}Nuevo alumno</button>` })}
+      <div class="buscador">${ic('buscar', 16)}<input class="input" id="buscar" placeholder="Buscar por nombre o DNI…"></div>
+      <section class="panel" style="overflow:hidden"><div class="panel-cab"><h2 class="t-titulo">Cargados</h2><span class="chip chip-neutro t-num">${lista.length}</span></div>
+        <div id="filas"></div></section>`;
+
+    function pintar() {
+      const visibles = lista.filter((a) => !texto || U.normalizar(`${a.nombre} ${a.dni}`).includes(texto)).sort(porNombre);
+      $('#filas', cont).innerHTML = visibles.map((a) => `<button type="button" class="lista-fila" data-dni="${esc(a.dni)}">${avatar(a.nombre)}
+        <div class="datos"><strong>${esc(a.nombre)}</strong><small class="t-num">DNI ${esc(a.dni)}${a.telefono ? ` · ${esc(a.telefono)}` : ''}</small>
+          <small>${esc(nombresActividades(a.actividades)) || 'Todavía sin actividades'}</small></div>${ic('editar', 16)}</button>`).join('')
+        || panelVacio(lista.length ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay alumnos. Empezá con “Nuevo alumno”.');
+    }
+
+    function modal(a) {
+      const nuevo = !a;
+      a = a || { dni: '', nombre: '', telefono: '', notas: '' };
+      const d = U.modal(`<form class="modal-cuerpo"><h2 class="t-titulo">${nuevo ? 'Nuevo alumno' : 'Editar alumno'}</h2>
+        ${campo('Nombre y apellido', `<input class="input" name="nombre" required value="${esc(a.nombre)}">`)}
+        ${campo('DNI', `<input class="input t-num" name="dni" required inputmode="numeric" placeholder="Sin puntos" value="${esc(a.dni)}" ${nuevo ? '' : 'disabled'}>`)}
+        ${campo('Celular', `<input class="input" name="telefono" inputmode="tel" value="${esc(a.telefono)}" placeholder="Para mandarle mensajes">`)}
+        <div class="acciones"><button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
+          <button class="btn btn-primario">Guardar</button></div></form>`);
+      const f = $('form', d);
+      f.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const dni = nuevo ? U.soloDigitos(f.dni.value) : a.dni;
+        const nombre = f.nombre.value.trim();
+        if (!dni) return U.aviso('El DNI es obligatorio', 'error');
+        if (!nombre) return U.aviso('Poné el nombre', 'error');
+        if (nuevo && lista.some((x) => x.dni === dni)) return U.aviso('Ya hay un alumno con ese DNI', 'error');
+        const datos = { dni, nombre, telefono: f.telefono.value.trim(), notas: a.notas || '' };
+        conCarga($('.btn-primario', f), async () => {
+          await Datos.cargarAlumno(datos, nuevo);
+          if (nuevo) lista.push({ ...datos, actividades: [] }); else Object.assign(a, datos);
+          d.close();
+          U.aviso(nuevo ? 'Alumno cargado' : 'Cambios guardados');
+          pintar();
+        });
+      });
+    }
+
+    $('#buscar', cont).addEventListener('input', (e) => { texto = U.normalizar(e.target.value); pintar(); });
+    $('#nuevo', cont).addEventListener('click', () => modal(null));
+    $('#filas', cont).addEventListener('click', (e) => { const b = e.target.closest('[data-dni]'); if (b) modal(lista.find((a) => a.dni === b.dataset.dni)); });
+    pintar();
   }
 
   // ---------------------------------------------------------------------
@@ -678,11 +795,11 @@ const Panel = (() => {
     const equipo = await Datos.listarEquipo();
 
     function pintar() {
-      cont.innerHTML = `${cabecera({ titulo: 'Profes', sub: 'Cada profe entra con su DNI y ve solo sus actividades.', acciones: `<button class="btn btn-primario" id="nuevo">${ic('mas')}Nuevo profe</button>` })}
+      cont.innerHTML = `${cabecera({ titulo: 'Profes', sub: 'Cada profe entra con su DNI y ve solo sus actividades. Carga de alumnos solo da de alta alumnos.', acciones: `<button class="btn btn-primario" id="nuevo">${ic('mas')}Nuevo acceso</button>` })}
         <section class="panel" style="overflow:hidden"><div class="panel-cab"><h2 class="t-titulo">Con acceso</h2><span class="chip chip-neutro t-num">${equipo.length + 1}</span></div>
           <div class="lista-fila" style="cursor:default">${avatar('Dueño Gimnasio')}<div class="datos"><strong>Dueño del gimnasio</strong><small>Entra con DNI y contraseña</small></div><span class="chip chip-acento">Todo</span></div>
           ${equipo.sort(porNombre).map((p) => `<div class="lista-fila" style="cursor:default" data-dni="${esc(p.dni)}">${avatar(p.nombre)}
-            <div class="datos"><strong>${esc(p.nombre)}</strong><small class="t-num">DNI ${esc(p.dni)}</small><small>${esc(nombresActividades(p.actividades)) || 'Sin actividades'}</small></div>
+            <div class="datos"><strong>${esc(p.nombre)}</strong><small class="t-num">DNI ${esc(p.dni)}</small><small>${p.rol === 'carga' ? 'Carga de alumnos' : esc(nombresActividades(p.actividades)) || 'Sin actividades'}</small></div>
             <button class="btn btn-fantasma btn-chico" data-editar>Editar</button></div>`).join('')}</section>`;
       $('#nuevo').addEventListener('click', () => modalProfe(null));
       $$('[data-editar]', cont).forEach((b) => b.addEventListener('click', () => modalProfe(equipo.find((p) => p.dni === b.closest('[data-dni]').dataset.dni))));
@@ -690,31 +807,37 @@ const Panel = (() => {
 
     function modalProfe(p) {
       const nuevo = !p;
-      p = p || { dni: '', nombre: '', actividades: [] };
+      p = p || { dni: '', nombre: '', actividades: [], rol: 'profe' };
       const d = U.modal(`<form class="modal-cuerpo">
-        <h2 class="t-titulo">${nuevo ? 'Nuevo profe' : 'Editar profe'}</h2>
+        <h2 class="t-titulo">${nuevo ? 'Nuevo acceso' : 'Editar acceso'}</h2>
+        ${campo('Tipo de acceso', `<select class="input select" name="rol"><option value="profe">Profe</option>
+          <option value="carga" ${p.rol === 'carga' ? 'selected' : ''}>Carga de alumnos (solo da de alta alumnos)</option></select>`)}
         ${campo('Nombre y apellido', `<input class="input" name="nombre" required value="${esc(p.nombre)}">`)}
         ${campo('DNI', `<input class="input t-num" name="dni" required inputmode="numeric" value="${esc(p.dni)}" ${nuevo ? '' : 'disabled'}>`)}
-        ${campo('Actividades que da', eleccionActividades('act', p.actividades))}
+        <div id="campo-actividades">${campo('Actividades que da', eleccionActividades('act', p.actividades))}</div>
         <div class="acciones">
           ${nuevo ? '' : '<button type="button" class="btn btn-peligro" id="borrar">Quitar acceso</button>'}
           <button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
           <button class="btn btn-primario">Guardar</button></div></form>`);
       const f = $('form', d);
+      const mostrarActividades = () => { $('#campo-actividades', d).hidden = f.rol.value === 'carga'; };
+      f.rol.addEventListener('change', mostrarActividades);
+      mostrarActividades();
       f.addEventListener('submit', (e) => {
         e.preventDefault();
         const dni = nuevo ? U.soloDigitos(f.dni.value) : p.dni;
-        const elegidas = leerEleccion(f, 'act');
+        const rol = f.rol.value;
+        const elegidas = rol === 'carga' ? [] : leerEleccion(f, 'act');
         if (!dni) return U.aviso('El DNI es obligatorio', 'error');
         if (CONFIG.dnisDueno.includes(dni)) return U.aviso('Ese DNI es del dueño', 'error');
-        if (nuevo && equipo.some((x) => x.dni === dni)) return U.aviso('Ya hay un profe con ese DNI', 'error');
-        if (!elegidas.length) return U.aviso('Elegí al menos una actividad', 'error');
-        const datos = { dni, nombre: f.nombre.value.trim(), actividades: elegidas };
+        if (nuevo && equipo.some((x) => x.dni === dni)) return U.aviso('Ya hay un acceso con ese DNI', 'error');
+        if (rol === 'profe' && !elegidas.length) return U.aviso('Elegí al menos una actividad', 'error');
+        const datos = { dni, nombre: f.nombre.value.trim(), actividades: elegidas, rol };
         conCarga($('.btn-primario', f), async () => {
           await Datos.guardarProfe(datos, nuevo);
           if (nuevo) equipo.push(datos); else Object.assign(p, datos);
           d.close();
-          U.aviso(nuevo ? 'Profe agregado' : 'Cambios guardados');
+          U.aviso(nuevo ? (rol === 'carga' ? 'Acceso de carga agregado' : 'Profe agregado') : 'Cambios guardados');
           pintar();
         });
       });
@@ -734,5 +857,5 @@ const Panel = (() => {
     pintar();
   }
 
-  return { mensajeWhatsapp, inicio, asistencia, actividades, alumnos, misAlumnos, precios, cuadro, profes };
+  return { mensajeWhatsapp, listaParaSumar, activarBuscador, inicio, asistencia, actividades, alumnos, misAlumnos, cargaAlumnos, precios, cuadro, profes };
 })();

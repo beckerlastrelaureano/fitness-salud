@@ -4,6 +4,7 @@
  * Hay una sola entrada: se pone el DNI y la app sabe quién es.
  *   Dueño   DNI + contraseña. Ve todo.
  *   Profe   DNI. Ve solo sus actividades. Rutinas y ejercicios, solo si las usa.
+ *   Carga   DNI. Da de alta alumnos (nombre, DNI y celular), nada más.
  *   Alumno  DNI. Ve su cuota, sus clases y su rutina.
  *
  * Las secciones van en el # de la dirección: #/alumnos, #/alumnos/30111222…
@@ -25,7 +26,8 @@ const App = (() => {
     { id: 'inicio', nombre: 'Inicio', icono: 'inicio', ver: Panel.inicio, solo: 'dueno' },
     { id: 'actividades', nombre: 'Actividades', icono: 'clases', ver: Panel.actividades, solo: 'dueno' },
     { id: 'alumnos', nombre: 'Alumnos', icono: 'alumnos', ver: Panel.alumnos, solo: 'dueno' },
-    { id: 'asistencia', nombre: 'Asistencia', icono: 'calendario', ver: Panel.asistencia },
+    { id: 'cargar', nombre: 'Alumnos', icono: 'alumnos', ver: Panel.cargaAlumnos, solo: 'carga' },
+    { id: 'asistencia', nombre: 'Asistencia', icono: 'calendario', ver: Panel.asistencia, solo: ['dueno', 'profe'] },
     { id: 'mis-alumnos', nombre: 'Mis alumnos', icono: 'alumnos', ver: Panel.misAlumnos, solo: 'profe' },
     { id: 'rutinas', nombre: 'Rutinas', icono: 'rutinas', ver: Rutinas.rutinas, activa: conRutinas },
     { id: 'ejercicios', nombre: 'Ejercicios', icono: 'pesa', ver: Rutinas.ejercicios, activa: conRutinas },
@@ -36,7 +38,7 @@ const App = (() => {
     { id: 'ajustes', nombre: 'Ajustes del gimnasio', icono: 'ajustes', ver: Ajustes.ajustes, solo: 'dueno' },
   ];
 
-  const seccionesDe = (rol) => SECCIONES.filter((s) => (!s.solo || s.solo === rol) && (!s.activa || s.activa()));
+  const seccionesDe = (rol) => SECCIONES.filter((s) => (!s.solo || [].concat(s.solo).includes(rol)) && (!s.activa || s.activa()));
 
   async function iniciar() {
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); pedidoInstalar = e; });
@@ -90,7 +92,7 @@ const App = (() => {
           <button class="btn btn-fantasma btn-icono salir-tel" data-salir aria-label="Cerrar sesión">${ic('salir')}</button></div>
         <nav class="col" style="gap:2px" aria-label="Secciones del panel">${lista.map((s) => `<a href="#/${s.id}" class="nav-item ${s === activa ? 'activo' : ''}">${ic(s.icono, 20)}<span style="flex:1">${esc(s.nombre)}</span></a>`).join('')}</nav>
         <div class="fila pie-lateral" style="margin-top:auto;gap:10px;padding:12px 8px 0;border-top:1px solid var(--borde2)">${avatar(persona)}
-          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc(persona)}</div><div class="t-tenue" style="font-size:12px">${sesion.rol === 'dueno' ? 'Administrador' : 'Profe'}</div></div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc(persona)}</div><div class="t-tenue" style="font-size:12px">${{ dueno: 'Administrador', carga: 'Carga de alumnos' }[sesion.rol] || 'Profe'}</div></div>
           <button class="btn btn-fantasma btn-icono" data-salir aria-label="Cerrar sesión">${ic('salir')}</button></div>
       </aside><main class="contenido entra" id="contenido"><p class="cargando">Cargando…</p></main></div>`;
     $$('[data-salir]').forEach((b) => b.addEventListener('click', () => Datos.salir().then(() => { location.hash = ''; })));
@@ -116,7 +118,7 @@ const App = (() => {
       <div class="entrada-marca">${logoGym(72)}<h1 class="t-titulo">${esc(estado.gym.nombre)}</h1>
         <span class="t-tenue" style="font-size:12px">con <span class="marca-gymapp">gym<b>App</b></span></span></div>
       ${contenido}
-      ${Datos.modo === 'demo' ? `<p class="demo-nota"><strong>Modo demo</strong>. Dueño: entrá con <code>${esc(CONFIG.dniPrueba)}</code> y configurá tu DNI · Profe <code>27333444</code> · Alumno <code>28999111</code><br><button class="link" id="reiniciar-demo">Reiniciar demo</button></p>` : ''}
+      ${Datos.modo === 'demo' ? `<p class="demo-nota"><strong>Modo demo</strong>. Dueño: entrá con <code>${esc(CONFIG.dniPrueba)}</code> y configurá tu DNI · Profe <code>27333444</code> · Carga <code>26111000</code> · Alumno <code>28999111</code><br><button class="link" id="reiniciar-demo">Reiniciar demo</button></p>` : ''}
     </main>`;
     const r = $('#reiniciar-demo');
     if (r) r.addEventListener('click', () => Datos.reiniciarDemo());
@@ -145,7 +147,7 @@ const App = (() => {
   }
 
   function vistaElegir(dni, quien) {
-    const TEXTOS = { dueno: 'Panel del dueño', profe: 'Panel de profe', alumno: 'Mi rutina y cuota' };
+    const TEXTOS = { dueno: 'Panel del dueño', profe: quien.carga ? 'Cargar alumnos' : 'Panel de profe', alumno: 'Mi rutina y cuota' };
     marcoIngreso(`<div class="col"><p class="t-suave" style="text-align:center">¿Cómo querés entrar?</p>
       ${quien.opciones.map((o) => `<button class="btn btn-secundario btn-ancho" data-o="${o}">${TEXTOS[o]}</button>`).join('')}
       <button class="link" id="volver">Volver</button></div>`);

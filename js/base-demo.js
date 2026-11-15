@@ -51,6 +51,7 @@ const BaseDemo = (() => {
         27333444: { dni: '27333444', nombre: 'Laura Méndez', rol: 'profe', actividades: ['pilates', 'yoga'] },
         28555666: { dni: '28555666', nombre: 'Diego Ríos', rol: 'profe', actividades: ['musculacion', 'funcional'] },
         29777888: { dni: '29777888', nombre: 'Vale Torres', rol: 'profe', actividades: ['spinning', 'stretching'] },
+        26111000: { dni: '26111000', nombre: 'Carla Gómez', rol: 'carga', actividades: [] },
       },
     };
     for (const e of Object.values(d.equipo)) d.cuentas[e.dni] = `FS-${e.dni}-profe`;

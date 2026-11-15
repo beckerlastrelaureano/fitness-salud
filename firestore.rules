@@ -6,6 +6,7 @@ rules_version = '2';
 //
 // - Dueño: entra con DNI y contraseña. Puede todo.
 // - Profes: entran con DNI. Pasan asistencia y manejan los turnos de sus actividades.
+// - Carga de alumnos: entra con DNI. Da de alta alumnos (nombre, DNI y celular).
 // - Alumnos: entran con DNI, sin sesión. Leen su ficha, sus turnos y su rutina y registran su día.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -14,22 +15,38 @@ service cloud.firestore {
     function dniSesion() { return request.auth.token.email.split('@')[0]; }
     function esDueno() { return conSesion() && dniSesion() in ['24408902']; }
     function rutaEquipo() { return /databases/$(database)/documents/equipo/$(dniSesion()); }
-    function esProfe() { return conSesion() && exists(rutaEquipo()); }
+    function enEquipo() { return conSesion() && exists(rutaEquipo()); }
+    function esCarga() { return enEquipo() && get(rutaEquipo()).data.get('rol', 'profe') == 'carga'; }
+    function esProfe() { return enEquipo() && get(rutaEquipo()).data.get('rol', 'profe') != 'carga'; }
+    // Dueño y profes. Carga de alumnos queda afuera: solo toca alumnos y contactos.
     function esEquipo() { return esDueno() || esProfe(); }
+    // Actividades que se suman o se sacan en un cambio: solo las del profe.
+    function cambioActividades() {
+      let antes = resource.data.get('actividades', []).toSet();
+      let despues = request.resource.data.get('actividades', []).toSet();
+      return despues.difference(antes).hasOnly(actividadesProfe()) && antes.difference(despues).hasOnly(actividadesProfe());
+    }
     function actividadesProfe() { return get(rutaEquipo()).data.actividades; }
 
     match /alumnos/{dni} {
       allow get: if true;
-      allow list: if esEquipo();
+      allow list: if esEquipo() || esCarga();
       allow write: if esDueno();
-      // El profe puede asignar rutina y anotar en turnos, nada más.
+      // El profe puede asignar rutina, anotar en turnos y sumar alumnos a sus actividades.
       allow update: if esProfe()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rutinaId', 'turnos']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rutinaId', 'turnos', 'actividades'])
+        && cambioActividades();
+      // Carga de alumnos: alta sin actividades ni cuota, y cambiar el nombre.
+      allow create: if esCarga() && request.resource.data.dni == dni
+        && request.resource.data.keys().hasOnly(['dni', 'nombre', 'actividades', 'turnos', 'monto', 'montoManual', 'vence', 'rutinaId', 'fechaAlta'])
+        && request.resource.data.actividades.size() == 0 && request.resource.data.turnos.size() == 0
+        && request.resource.data.monto == 0 && request.resource.data.vence == null;
+      allow update: if esCarga() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre']);
     }
 
-    // Teléfono y notas: solo el dueño.
+    // Teléfono y notas: el dueño. Carga de alumnos los ve y los carga.
     match /contactos/{dni} {
-      allow read, write: if esDueno();
+      allow read, write: if esDueno() || esCarga();
     }
 
     match /equipo/{dni} {

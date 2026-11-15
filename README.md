@@ -20,6 +20,16 @@ Si un DNI es de dos cosas (por ejemplo, profe y alumno), la app pregunta cómo e
 La app le pide su DNI real (el de `dnisDueno`, hoy `24408902`) y que cree su contraseña.
 Desde ahí entra con su DNI y contraseña, y el DNI de prueba deja de servir.
 
+## Carga de alumnos
+
+En **Profes > Nuevo acceso**, el dueño elige **Carga de alumnos**. Esa persona entra con su DNI y
+solo ve **Alumnos**: da de alta (nombre, DNI y celular) y corrige nombre o celular. No ve cuotas,
+cobros, precios ni asistencia, y no puede borrar alumnos.
+
+Después cada profe busca en ese listado y suma al alumno a su actividad: desde el turno (Clases o
+Asistencia > Sumar alumnos a esta clase) o desde **Mis alumnos > Sumar alumno**. La cuota del alumno
+se acomoda sola con los precios cuando el dueño abre Alumnos (salvo que tenga precio a mano).
+
 ## Qué tiene el profe
 
 - **Asistencia**: elige el día y el turno de su clase. Con **Sumar alumnos a esta clase** elige
