@@ -601,7 +601,7 @@ const Panel = (() => {
   async function cargaAlumnos(cont) {
     const lista = await Datos.listarAlumnos({ conContacto: true });
     let texto = '';
-    cont.innerHTML = `${cabecera({ titulo: 'Alumnos', sub: 'Cargá a los alumnos. Después cada profe los suma a sus clases.',
+    cont.innerHTML = `${cabecera({ titulo: 'Alumnos', sub: 'Cargá a los alumnos y las actividades que hacen. Después cada profe los anota en sus horarios.',
         acciones: `<button class="btn btn-primario" id="nuevo">${ic('mas')}Nuevo alumno</button>` })}
       <div class="buscador">${ic('buscar', 16)}<input class="input" id="buscar" placeholder="Buscar por nombre o DNI…"></div>
       <section class="panel" style="overflow:hidden"><div class="panel-cab"><h2 class="t-titulo">Cargados</h2><span class="chip chip-neutro t-num">${lista.length}</span></div>
@@ -617,14 +617,18 @@ const Panel = (() => {
 
     function modal(a) {
       const nuevo = !a;
-      a = a || { dni: '', nombre: '', telefono: '', notas: '' };
+      a = a || { dni: '', nombre: '', telefono: '', notas: '', actividades: [] };
+      const tenia = a.actividades || [];
       const d = U.modal(`<form class="modal-cuerpo"><h2 class="t-titulo">${nuevo ? 'Nuevo alumno' : 'Editar alumno'}</h2>
         ${campo('Nombre y apellido', `<input class="input" name="nombre" required value="${esc(a.nombre)}">`)}
         ${campo('DNI', `<input class="input t-num" name="dni" required inputmode="numeric" placeholder="Sin puntos" value="${esc(a.dni)}" ${nuevo ? '' : 'disabled'}>`)}
         ${campo('Celular', `<input class="input" name="telefono" inputmode="tel" value="${esc(a.telefono)}" placeholder="Para mandarle mensajes">`)}
+        ${campo('Actividades que hace', eleccionActividades('act', tenia), nuevo ? 'El horario se lo asigna cada profe.' : 'Podés sumar actividades. Para sacar una, avisale al dueño.')}
         <div class="acciones"><button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
           <button class="btn btn-primario">Guardar</button></div></form>`);
       const f = $('form', d);
+      // Las que ya tenía no se sacan desde acá: el alumno puede estar anotado en esos turnos.
+      $$('input[name="act"]', d).forEach((i) => { if (tenia.includes(i.value)) i.disabled = true; });
       f.addEventListener('submit', (e) => {
         e.preventDefault();
         const dni = nuevo ? U.soloDigitos(f.dni.value) : a.dni;
@@ -632,10 +636,11 @@ const Panel = (() => {
         if (!dni) return U.aviso('El DNI es obligatorio', 'error');
         if (!nombre) return U.aviso('Poné el nombre', 'error');
         if (nuevo && lista.some((x) => x.dni === dni)) return U.aviso('Ya hay un alumno con ese DNI', 'error');
-        const datos = { dni, nombre, telefono: f.telefono.value.trim(), notas: a.notas || '' };
+        const actividades = [...new Set([...tenia, ...leerEleccion(f, 'act')])];
+        const datos = { dni, nombre, telefono: f.telefono.value.trim(), notas: a.notas || '', actividades };
         conCarga($('.btn-primario', f), async () => {
           await Datos.cargarAlumno(datos, nuevo);
-          if (nuevo) lista.push({ ...datos, actividades: [] }); else Object.assign(a, datos);
+          if (nuevo) lista.push(datos); else Object.assign(a, datos);
           d.close();
           U.aviso(nuevo ? 'Alumno cargado' : 'Cambios guardados');
           pintar();

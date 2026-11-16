@@ -100,14 +100,14 @@ const Datos = (() => {
     await base.borrar('contactos', dni);
   }
 
-  // Alta y edición desde Carga de alumnos: nombre, DNI y celular. Las
-  // actividades las suma después cada profe, y la cuota la maneja el dueño.
-  async function cargarAlumno({ dni, nombre, telefono, notas = '' }, nuevo) {
+  // Alta y edición desde Carga de alumnos: nombre, DNI, celular y actividades.
+  // Los turnos los elige cada profe, y la cuota se acomoda cuando el dueño abre Alumnos.
+  async function cargarAlumno({ dni, nombre, telefono, actividades = [], notas = '' }, nuevo) {
     if (nuevo) {
-      await base.guardar('alumnos', dni, { dni, nombre, actividades: [], turnos: [], monto: 0, montoManual: false,
+      await base.guardar('alumnos', dni, { dni, nombre, actividades, turnos: [], monto: 0, montoManual: false,
         vence: null, rutinaId: null, fechaAlta: U.hoy() });
     } else {
-      await base.actualizar('alumnos', dni, { nombre });
+      await base.actualizar('alumnos', dni, { nombre, actividades });
     }
     await base.guardar('contactos', dni, { telefono, notas });
   }
