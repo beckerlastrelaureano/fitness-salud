@@ -102,12 +102,20 @@ const Datos = (() => {
 
   // Alta y edición desde Carga de alumnos: nombre, DNI, celular y actividades.
   // Los turnos los elige cada profe, y la cuota se acomoda cuando el dueño abre Alumnos.
-  async function cargarAlumno({ dni, nombre, telefono, actividades = [], notas = '' }, nuevo) {
+  // Si se saca una actividad, el alumno sale también de sus turnos.
+  async function cargarAlumno({ dni, nombre, telefono, actividades = [], notas = '' }, nuevo, anterior = {}) {
     if (nuevo) {
       await base.guardar('alumnos', dni, { dni, nombre, actividades, turnos: [], monto: 0, montoManual: false,
         vence: null, rutinaId: null, fechaAlta: U.hoy() });
     } else {
-      await base.actualizar('alumnos', dni, { nombre, actividades });
+      const campos = { nombre, actividades };
+      const quitadas = (anterior.actividades || []).filter((a) => !actividades.includes(a));
+      if (quitadas.length && (anterior.turnos || []).length) {
+        const turnos = await Promise.all(anterior.turnos.map((id) => base.obtener('turnos', id)));
+        campos.turnos = anterior.turnos.filter((id, i) => turnos[i] && !quitadas.includes(turnos[i].actividad));
+      }
+      await base.actualizar('alumnos', dni, campos);
+      if (campos.turnos) anterior.turnos = campos.turnos;
     }
     await base.guardar('contactos', dni, { telefono, notas });
   }

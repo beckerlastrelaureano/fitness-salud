@@ -601,7 +601,7 @@ const Panel = (() => {
   async function cargaAlumnos(cont) {
     const lista = await Datos.listarAlumnos({ conContacto: true });
     let texto = '';
-    cont.innerHTML = `${cabecera({ titulo: 'Alumnos', sub: 'Cargá a los alumnos y las actividades que hacen. Después cada profe los anota en sus horarios.',
+    cont.innerHTML = `${cabecera({ titulo: 'Alumnos', sub: 'Cargá y editá a los alumnos y las actividades que hacen. Después cada profe los anota en sus horarios.',
         acciones: `<button class="btn btn-primario" id="nuevo">${ic('mas')}Nuevo alumno</button>` })}
       <div class="buscador">${ic('buscar', 16)}<input class="input" id="buscar" placeholder="Buscar por nombre o DNI…"></div>
       <section class="panel" style="overflow:hidden"><div class="panel-cab"><h2 class="t-titulo">Cargados</h2><span class="chip chip-neutro t-num">${lista.length}</span></div>
@@ -611,7 +611,7 @@ const Panel = (() => {
       const visibles = lista.filter((a) => !texto || U.normalizar(`${a.nombre} ${a.dni}`).includes(texto)).sort(porNombre);
       $('#filas', cont).innerHTML = visibles.map((a) => `<button type="button" class="lista-fila" data-dni="${esc(a.dni)}">${avatar(a.nombre)}
         <div class="datos"><strong>${esc(a.nombre)}</strong><small class="t-num">DNI ${esc(a.dni)}${a.telefono ? ` · ${esc(a.telefono)}` : ''}</small>
-          <small>${esc(nombresActividades(a.actividades)) || 'Todavía sin actividades'}</small></div>${ic('editar', 16)}</button>`).join('')
+          <small>${esc(nombresActividades(a.actividades)) || 'Todavía sin actividades'}</small></div><span class="btn btn-secundario btn-chico">${ic('editar', 16)}Editar</span></button>`).join('')
         || panelVacio(lista.length ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay alumnos. Empezá con “Nuevo alumno”.');
     }
 
@@ -623,12 +623,10 @@ const Panel = (() => {
         ${campo('Nombre y apellido', `<input class="input" name="nombre" required value="${esc(a.nombre)}">`)}
         ${campo('DNI', `<input class="input t-num" name="dni" required inputmode="numeric" placeholder="Sin puntos" value="${esc(a.dni)}" ${nuevo ? '' : 'disabled'}>`)}
         ${campo('Celular', `<input class="input" name="telefono" inputmode="tel" value="${esc(a.telefono)}" placeholder="Para mandarle mensajes">`)}
-        ${campo('Actividades que hace', eleccionActividades('act', tenia), nuevo ? 'El horario se lo asigna cada profe.' : 'Podés sumar actividades. Para sacar una, avisale al dueño.')}
+        ${campo('Actividades que hace', eleccionActividades('act', tenia), nuevo ? 'El horario se lo asigna cada profe.' : 'Si sacás una actividad, también sale de sus horarios de esa actividad.')}
         <div class="acciones"><button type="button" class="btn btn-fantasma" data-cerrar>Cancelar</button>
           <button class="btn btn-primario">Guardar</button></div></form>`);
       const f = $('form', d);
-      // Las que ya tenía no se sacan desde acá: el alumno puede estar anotado en esos turnos.
-      $$('input[name="act"]', d).forEach((i) => { if (tenia.includes(i.value)) i.disabled = true; });
       f.addEventListener('submit', (e) => {
         e.preventDefault();
         const dni = nuevo ? U.soloDigitos(f.dni.value) : a.dni;
@@ -636,10 +634,12 @@ const Panel = (() => {
         if (!dni) return U.aviso('El DNI es obligatorio', 'error');
         if (!nombre) return U.aviso('Poné el nombre', 'error');
         if (nuevo && lista.some((x) => x.dni === dni)) return U.aviso('Ya hay un alumno con ese DNI', 'error');
-        const actividades = [...new Set([...tenia, ...leerEleccion(f, 'act')])];
+        const actividades = leerEleccion(f, 'act');
+        const quitadas = tenia.filter((x) => !actividades.includes(x));
         const datos = { dni, nombre, telefono: f.telefono.value.trim(), notas: a.notas || '', actividades };
         conCarga($('.btn-primario', f), async () => {
-          await Datos.cargarAlumno(datos, nuevo);
+          if (quitadas.length && !(await U.confirmar(`¿Sacar a ${nombre} de ${nombresActividades(quitadas)}? También sale de sus horarios.`, 'Sacar'))) return;
+          await Datos.cargarAlumno(datos, nuevo, a);
           if (nuevo) lista.push(datos); else Object.assign(a, datos);
           d.close();
           U.aviso(nuevo ? 'Alumno cargado' : 'Cambios guardados');

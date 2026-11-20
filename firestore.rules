@@ -36,14 +36,14 @@ service cloud.firestore {
       allow update: if esProfe()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rutinaId', 'turnos', 'actividades'])
         && cambioActividades();
-      // Carga de alumnos: alta con actividades, sin turnos ni cuota. Después cambia el nombre
-      // y suma actividades (no las saca: el alumno puede estar anotado en esos turnos).
+      // Carga de alumnos: alta con actividades, sin turnos ni cuota. Después edita nombre y
+      // actividades; al sacar una actividad puede sacarlo de turnos, pero no anotarlo.
       allow create: if esCarga() && request.resource.data.dni == dni
         && request.resource.data.keys().hasOnly(['dni', 'nombre', 'actividades', 'turnos', 'monto', 'montoManual', 'vence', 'rutinaId', 'fechaAlta'])
         && request.resource.data.turnos.size() == 0
         && request.resource.data.monto == 0 && request.resource.data.vence == null;
-      allow update: if esCarga() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'actividades'])
-        && resource.data.get('actividades', []).toSet().difference(request.resource.data.get('actividades', []).toSet()).size() == 0;
+      allow update: if esCarga() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'actividades', 'turnos'])
+        && request.resource.data.get('turnos', []).toSet().difference(resource.data.get('turnos', []).toSet()).size() == 0;
     }
 
     // Teléfono y notas: el dueño. Carga de alumnos los ve y los carga.

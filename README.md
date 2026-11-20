@@ -23,8 +23,8 @@ Desde ahí entra con su DNI y contraseña, y el DNI de prueba deja de servir.
 ## Carga de alumnos
 
 En **Profes > Nuevo acceso**, el dueño elige **Carga de alumnos**. Esa persona entra con su DNI y
-solo ve **Alumnos**: da de alta (nombre, DNI, celular y actividades que hace), corrige nombre o
-celular y suma actividades. No ve cuotas,
+solo ve **Alumnos**: da de alta (nombre, DNI, celular y actividades que hace) y los edita: nombre,
+celular y actividades. Si saca una actividad, el alumno sale también de sus horarios de esa actividad. No ve cuotas,
 cobros, precios ni asistencia, y no puede borrar alumnos.
 
 Después cada profe busca en ese listado y suma al alumno a su actividad: desde el turno (Clases o
